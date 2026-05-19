@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "mcp-feedback-enhanced": {
+      "command": "/Users/mr9esx/.cursor/extensions/mcp-feedback.cursor-feedback-2-2.4.0/dist/bin/mcp-server",
+      "args": [],
+      "env": {
+        "MCP_FEEDBACK_WORKSPACE_ID": "483cf76ccb4b",
+        "MCP_FEEDBACK_WORKSPACE_FOLDER": "/Users/mr9esx/risu",
+        "MCP_FEEDBACK_WORKSPACE_NAME": "risu",
+        "MCP_FEEDBACK_STATE_DB": "/Users/mr9esx/Library/Application Support/Cursor/User/workspaceStorage/7b40b81cba1ba8367b15a09fda93c18a/state.vscdb"
+      },
+      "timeout": 600,
+      "autoApprove": [
+        "interactive_feedback"
+      ]
+    }
+  }
+}
