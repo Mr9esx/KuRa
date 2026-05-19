@@ -1,0 +1,91 @@
+name: Release Deploy
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npx vite build
+
+      - name: Pack build output
+        run: tar -czf release.tar.gz dist
+
+      - name: Upload build artifact to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          source: release.tar.gz
+          target: /tmp
+
+      - name: Deploy and configure Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          script: |
+            set -e
+
+            DEPLOY_PATH="/var/www/miaoplus.com"
+            DOMAIN="miaoplus.com"
+
+            if ! command -v nginx >/dev/null 2>&1; then
+              if command -v apt-get >/dev/null 2>&1; then
+                apt-get update
+                apt-get install -y nginx
+              elif command -v yum >/dev/null 2>&1; then
+                yum install -y nginx
+              elif command -v dnf >/dev/null 2>&1; then
+                dnf install -y nginx
+              else
+                echo "Unsupported Linux distribution: cannot install nginx automatically."
+                exit 1
+              fi
+            fi
+
+            mkdir -p "${DEPLOY_PATH}"
+            rm -rf "${DEPLOY_PATH}/dist"
+            tar -xzf /tmp/release.tar.gz -C "${DEPLOY_PATH}"
+            rm -f /tmp/release.tar.gz
+
+            cat > /etc/nginx/conf.d/${DOMAIN}.conf <<EOF
+            server {
+              listen 80;
+              server_name ${DOMAIN} www.${DOMAIN};
+
+              root ${DEPLOY_PATH}/dist;
+              index index.html;
+
+              location / {
+                try_files \$uri \$uri/ /index.html;
+              }
+
+              location /assets/ {
+                expires 30d;
+                add_header Cache-Control "public, immutable";
+              }
+            }
+            EOF
+
+            nginx -t
+            systemctl enable nginx || true
+            systemctl reload nginx || systemctl restart nginx
