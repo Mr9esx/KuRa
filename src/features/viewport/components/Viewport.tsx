@@ -12,7 +12,7 @@ import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
 import type { Preset } from "@/types/catalog"
-import { Trash2, ChevronLeft, ChevronRight, Eraser } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers } from "lucide-react"
 import {
   NavigationMenu,
   NavigationMenuList,
@@ -21,6 +21,7 @@ import {
   NavigationMenuContent,
 } from "@/components/ui/navigation-menu"
 import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
 import { PresetDialog } from "@/features/catalog/components/PresetDialog"
 import { BlockMesh } from "./BlockMesh"
 import { CellGrid } from "./CellGrid"
@@ -366,6 +367,265 @@ function PresetSelector({
   )
 }
 
+function MobileTopBar() {
+  return (
+    <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
+      <span className="text-sm font-semibold tracking-tight">RiSu</span>
+      <button
+        onClick={() => {
+          const { mode, setMode } = useThemeStore.getState()
+          setMode(mode === "dark" ? "light" : "dark")
+        }}
+        className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+        aria-label="切换主题"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+          <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+          <path d="M12 3l0 18" />
+          <path d="M12 9l4.65 -4.65" />
+          <path d="M12 14.3l7.37 -7.37" />
+          <path d="M12 19.6l8.85 -8.85" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+export function MobileActionBar() {
+  const [activePreset, setActivePreset] = useState<Preset | null>(null)
+  const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false)
+  const barRef = useRef<HTMLDivElement>(null)
+  const [presetPanelMaxWidth, setPresetPanelMaxWidth] = useState(720)
+  const blockColorId = useEditorStore((s) => s.blockColorId)
+  const itemColorId = useEditorStore((s) => s.itemColorId)
+  const block = useEditorStore((s) => s.block)
+  const placements = useEditorStore((s) => s.placements)
+  const selectedPlacementId = useEditorStore((s) => s.selectedPlacementId)
+  const setBlockColor = useEditorStore((s) => s.setBlockColor)
+  const setItemColor = useEditorStore((s) => s.setItemColor)
+  const clearAll = useEditorStore((s) => s.clearAll)
+  const removePlacement = useEditorStore((s) => s.removePlacement)
+  const count = placements.length
+
+  useEffect(() => {
+    if (!barRef.current) return
+    const update = () => {
+      if (!barRef.current) return
+      setPresetPanelMaxWidth(Math.max(320, barRef.current.clientWidth - 24))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(barRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  const handleClear = () => {
+    if (count === 0) return
+    setConfirmClearOpen(true)
+  }
+
+  const exportModelMock = () => {
+    const payload = {
+      type: "model-mock",
+      exportedAt: new Date().toISOString(),
+      block,
+      placements,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+    saveAs(blob, `risu-model-mock-${Date.now()}.json`)
+  }
+
+  const exportShoppingList = () => {
+    const counter = new Map<string, number>()
+    for (const p of placements) {
+      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
+    }
+    const list = Array.from(counter.entries()).map(([sku, qty]) => ({
+      sku,
+      name: findItemBySku(sku)?.name ?? sku,
+      qty,
+    }))
+    const payload = {
+      type: "shopping-list-mock",
+      exportedAt: new Date().toISOString(),
+      block: { sku: block.sku, name: block.name },
+      items: list,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+    saveAs(blob, `risu-shopping-list-${Date.now()}.json`)
+  }
+
+  const exportAllMock = async () => {
+    const zip = new JSZip()
+    const model = {
+      type: "model-mock",
+      exportedAt: new Date().toISOString(),
+      block,
+      placements,
+    }
+    const counter = new Map<string, number>()
+    for (const p of placements) {
+      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
+    }
+    const shopping = {
+      type: "shopping-list-mock",
+      exportedAt: new Date().toISOString(),
+      block: { sku: block.sku, name: block.name },
+      items: Array.from(counter.entries()).map(([sku, qty]) => ({
+        sku,
+        name: findItemBySku(sku)?.name ?? sku,
+        qty,
+      })),
+    }
+    zip.file("model.mock.json", JSON.stringify(model, null, 2))
+    zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
+    const blob = await zip.generateAsync({ type: "blob" })
+    saveAs(blob, `risu-export-${Date.now()}.zip`)
+  }
+
+  const iconTrigger =
+    "inline-flex size-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground [&>svg+svg]:hidden"
+
+  return (
+    <div ref={barRef} className="flex items-center gap-0.5">
+      <NavigationMenu className="flex-none" side="top" sideOffset={10}>
+        <NavigationMenuList className="gap-0">
+          <NavigationMenuItem>
+            <NavigationMenuTrigger className={iconTrigger} aria-label="材质">
+              <Pipette className="size-4" />
+            </NavigationMenuTrigger>
+            <NavigationMenuContent>
+              <div className="flex flex-col gap-2 p-2">
+                <div className="inline-flex rounded-md border border-border p-0.5">
+                  <button
+                    onClick={() => setMaterialTarget("block")}
+                    className={cn(
+                      "rounded-[5px] px-2 py-1 text-xs transition-colors",
+                      materialTarget === "block"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    框体
+                  </button>
+                  <button
+                    onClick={() => setMaterialTarget("item")}
+                    className={cn(
+                      "rounded-[5px] px-2 py-1 text-xs transition-colors",
+                      materialTarget === "item"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    收纳件
+                  </button>
+                </div>
+                <ColorPicker
+                  value={materialTarget === "block" ? blockColorId : itemColorId}
+                  onChange={materialTarget === "block" ? setBlockColor : setItemColor}
+                />
+              </div>
+            </NavigationMenuContent>
+          </NavigationMenuItem>
+
+          <NavigationMenuItem>
+            <NavigationMenuTrigger className={iconTrigger} aria-label="导出">
+              <Upload className="size-4" />
+            </NavigationMenuTrigger>
+            <NavigationMenuContent>
+              <div className="flex min-w-[180px] flex-col gap-1 p-2">
+                <button
+                  onClick={exportModelMock}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  导出模型（Mock）
+                </button>
+                <button
+                  onClick={exportShoppingList}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  导出购物清单（Mock）
+                </button>
+                <button
+                  onClick={exportAllMock}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  全部导出（Mock）
+                </button>
+              </div>
+            </NavigationMenuContent>
+          </NavigationMenuItem>
+
+          <NavigationMenuItem>
+            <NavigationMenuTrigger className={iconTrigger} aria-label="套装">
+              <Layers className="size-4" />
+            </NavigationMenuTrigger>
+            <NavigationMenuContent className="p-1">
+              <PresetSelector
+                onSelect={setActivePreset}
+                maxWidth={presetPanelMaxWidth}
+              />
+            </NavigationMenuContent>
+          </NavigationMenuItem>
+        </NavigationMenuList>
+      </NavigationMenu>
+
+      <div className="mx-px h-3.5 w-px bg-border" />
+
+      <button
+        onClick={() => selectedPlacementId && removePlacement(selectedPlacementId)}
+        disabled={!selectedPlacementId}
+        className="inline-flex size-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+        aria-label="删除选中"
+      >
+        <Trash2 className="size-4" />
+      </button>
+      <button
+        onClick={handleClear}
+        disabled={count === 0}
+        className="inline-flex size-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+        aria-label="清空"
+      >
+        <Eraser className="size-4" />
+      </button>
+
+      <PresetDialog
+        preset={activePreset}
+        open={!!activePreset}
+        onOpenChange={(open) => !open && setActivePreset(null)}
+      />
+
+      <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+            <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
+            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+              确认清空当前布局吗？此操作不可撤销。
+            </Dialog.Description>
+            <div className="mt-4 flex justify-end gap-2">
+              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+                取消
+              </Dialog.Close>
+              <button
+                onClick={() => {
+                  clearAll()
+                  setConfirmClearOpen(false)
+                }}
+                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+              >
+                确认清空
+              </button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </div>
+  )
+}
+
 function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   const [activePreset, setActivePreset] = useState<Preset | null>(null)
   const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
@@ -463,6 +723,8 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     saveAs(blob, `risu-export-${Date.now()}.zip`)
   }
 
+  if (mobile) return <MobileTopBar />
+
   const menus = (
     <>
       <NavigationMenu className="flex-none" sideOffset={14}>
@@ -555,39 +817,12 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       className="pointer-events-auto flex w-full items-center gap-2 rounded-xl border border-border bg-background/80 px-1 py-1 backdrop-blur-md"
     >
       <div className="flex min-w-0 flex-1 items-center">
-        {mobile ? (
-          <div className="flex items-center gap-1 pl-2 pr-1">
-            <span className="text-sm font-semibold tracking-tight">RiSu</span>
-            <button
-              onClick={() => {
-                const { mode, setMode } = useThemeStore.getState()
-                setMode(mode === "dark" ? "light" : "dark")
-              }}
-              className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
-              aria-label="切换主题"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
-                <path d="M12 3l0 18" />
-                <path d="M12 9l4.65 -4.65" />
-                <path d="M12 14.3l7.37 -7.37" />
-                <path d="M12 19.6l8.85 -8.85" />
-              </svg>
-            </button>
-          </div>
-        ) : (
-          <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-0.5">
-            {menus}
-          </div>
-        )}
+        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-0.5">
+          {menus}
+        </div>
       </div>
 
-      <div className={cn(
-        "flex shrink-0 items-center gap-1",
-        mobile && "no-scrollbar max-w-[72vw] overflow-x-auto",
-      )}>
-        {mobile && <div className="flex items-center gap-1 px-2 py-0.5">{menus}</div>}
+      <div className="flex shrink-0 items-center gap-1">
         <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-1 py-1">
           <Button
             variant="ghost"
