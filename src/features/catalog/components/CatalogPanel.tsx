@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react"
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { useCatalog } from "@/hooks/use-catalog"
@@ -70,6 +70,67 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   const block = useEditorStore((s) => s.block)
   const setBlock = useEditorStore((s) => s.setBlock)
   const { data, loading, error } = useCatalog()
+
+  // ── Mobile long-press drag ──
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const didDragRef = useRef(false)
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    longPressOriginRef.current = null
+  }, [])
+
+  useEffect(() => cancelLongPress, [cancelLongPress])
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent, sku: string) => {
+      const touch = e.touches[0]
+      longPressOriginRef.current = { x: touch.clientX, y: touch.clientY }
+      didDragRef.current = false
+
+      longPressTimerRef.current = setTimeout(() => {
+        didDragRef.current = true
+        longPressTimerRef.current = null
+        selectItem(null)
+        window.dispatchEvent(
+          new CustomEvent("risu:drag-item-start", { detail: { sku } }),
+        )
+      }, 300)
+    },
+    [selectItem],
+  )
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!longPressOriginRef.current || !longPressTimerRef.current) return
+      const touch = e.touches[0]
+      const dx = touch.clientX - longPressOriginRef.current.x
+      const dy = touch.clientY - longPressOriginRef.current.y
+      if (dx * dx + dy * dy > 100) {
+        cancelLongPress()
+      }
+    },
+    [cancelLongPress],
+  )
+
+  const handleTouchEnd = useCallback(() => {
+    cancelLongPress()
+  }, [cancelLongPress])
+
+  const handleMobileItemClick = useCallback(
+    (sku: string) => {
+      if (didDragRef.current) {
+        didDragRef.current = false
+        return
+      }
+      selectItem(sku)
+    },
+    [selectItem],
+  )
 
   const handleDragStart = (e: DragEvent<HTMLButtonElement>, sku: string) => {
     e.dataTransfer.effectAllowed = "copy"
@@ -179,10 +240,11 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   {filteredItems.map((item) => (
                     <button
                       key={item.sku}
-                      onClick={() => selectItem(item.sku)}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item.sku)}
-                      onDragEnd={handleDragEnd}
+                      onClick={() => handleMobileItemClick(item.sku)}
+                      onTouchStart={(e) => handleTouchStart(e, item.sku)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={handleTouchEnd}
                       className={cn(
                         "group flex flex-col rounded-lg border p-2 text-left transition-all",
                         selectedSku === item.sku
@@ -190,7 +252,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                           : "border-border hover:border-foreground/30 hover:bg-muted/50",
                       )}
                     >
-                      <div className="mb-1.5 flex aspect-square items-center justify-center rounded-md bg-muted/60">
+                      <div className="mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
                         <div
                           className={cn(
                             "rounded-sm transition-colors",
@@ -320,7 +382,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       : "border-border hover:border-foreground/30 hover:bg-muted/50",
                   )}
                 >
-                  <div className="mb-2 flex aspect-square items-center justify-center rounded-md bg-muted/60">
+                  <div className="mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
                     <div
                       className={cn(
                         "rounded-sm transition-colors",
