@@ -395,6 +395,7 @@ function MobileTopBar() {
 export function MobileActionBar() {
   const [activePreset, setActivePreset] = useState<Preset | null>(null)
   const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
   const [presetPanelMaxWidth, setPresetPanelMaxWidth] = useState(720)
@@ -420,6 +421,11 @@ export function MobileActionBar() {
     observer.observe(barRef.current)
     return () => observer.disconnect()
   }, [])
+
+  const handleDelete = () => {
+    if (!selectedPlacementId) return
+    setConfirmDeleteOpen(true)
+  }
 
   const handleClear = () => {
     if (count === 0) return
@@ -486,7 +492,7 @@ export function MobileActionBar() {
   }
 
   const iconTrigger =
-    "inline-flex size-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground [&>svg+svg]:hidden"
+    "inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground [&>svg+svg]:hidden"
 
   return (
     <div ref={barRef} className="flex items-center gap-0.5">
@@ -494,7 +500,7 @@ export function MobileActionBar() {
         <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
             <NavigationMenuTrigger className={iconTrigger} aria-label="材质">
-              <Pipette className="size-4" />
+              <Pipette className="size-[18px]" />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <div className="flex flex-col gap-2 p-2">
@@ -532,7 +538,7 @@ export function MobileActionBar() {
 
           <NavigationMenuItem>
             <NavigationMenuTrigger className={iconTrigger} aria-label="导出">
-              <Upload className="size-4" />
+              <Upload className="size-[18px]" />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <div className="flex min-w-[180px] flex-col gap-1 p-2">
@@ -560,7 +566,7 @@ export function MobileActionBar() {
 
           <NavigationMenuItem>
             <NavigationMenuTrigger className={iconTrigger} aria-label="套装">
-              <Layers className="size-4" />
+              <Layers className="size-[18px]" />
             </NavigationMenuTrigger>
             <NavigationMenuContent className="p-1">
               <PresetSelector
@@ -575,20 +581,20 @@ export function MobileActionBar() {
       <div className="mx-px h-3.5 w-px bg-border" />
 
       <button
-        onClick={() => selectedPlacementId && removePlacement(selectedPlacementId)}
+        onClick={handleDelete}
         disabled={!selectedPlacementId}
-        className="inline-flex size-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
+        className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
         aria-label="删除选中"
       >
-        <Trash2 className="size-4" />
+        <Trash2 className="size-[18px]" />
       </button>
       <button
         onClick={handleClear}
         disabled={count === 0}
-        className="inline-flex size-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+        className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
         aria-label="清空"
       >
-        <Eraser className="size-4" />
+        <Eraser className="size-[18px]" />
       </button>
 
       <PresetDialog
@@ -596,6 +602,32 @@ export function MobileActionBar() {
         open={!!activePreset}
         onOpenChange={(open) => !open && setActivePreset(null)}
       />
+
+      <Dialog.Root open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+            <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
+            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+              确认删除选中的收纳件吗？
+            </Dialog.Description>
+            <div className="mt-4 flex justify-end gap-2">
+              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+                取消
+              </Dialog.Close>
+              <button
+                onClick={() => {
+                  if (selectedPlacementId) removePlacement(selectedPlacementId)
+                  setConfirmDeleteOpen(false)
+                }}
+                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+              >
+                确认删除
+              </button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
         <Dialog.Portal>
@@ -629,6 +661,7 @@ export function MobileActionBar() {
 function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   const [activePreset, setActivePreset] = useState<Preset | null>(null)
   const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [presetPanelMaxWidth, setPresetPanelMaxWidth] = useState(720)
@@ -658,6 +691,11 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     observer.observe(toolbarRef.current)
     return () => observer.disconnect()
   }, [])
+
+  const handleDelete = () => {
+    if (!selectedPlacementId) return
+    setConfirmDeleteOpen(true)
+  }
 
   const handleClear = () => {
     if (count === 0) return
@@ -827,7 +865,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => selectedPlacementId && removePlacement(selectedPlacementId)}
+            onClick={handleDelete}
             disabled={!selectedPlacementId}
             className="px-2 text-xs text-foreground hover:bg-accent hover:text-foreground data-[disabled]:text-muted-foreground"
             title="删除选中"
@@ -854,6 +892,32 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
         open={!!activePreset}
         onOpenChange={(open) => !open && setActivePreset(null)}
       />
+
+      <Dialog.Root open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+            <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
+            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+              确认删除选中的收纳件吗？
+            </Dialog.Description>
+            <div className="mt-4 flex justify-end gap-2">
+              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+                取消
+              </Dialog.Close>
+              <button
+                onClick={() => {
+                  if (selectedPlacementId) removePlacement(selectedPlacementId)
+                  setConfirmDeleteOpen(false)
+                }}
+                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+              >
+                确认删除
+              </button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
         <Dialog.Portal>
