@@ -5,6 +5,8 @@ import { useCatalog } from "@/hooks/use-catalog"
 import { useTour } from "@/components/tour"
 import { MobileActionBar } from "@/features/viewport"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import { CircleHelp } from "lucide-react"
 import { TOUR_STORAGE_KEY } from "@/config/tour"
 import type { CatalogItem } from "@/types/catalog"
@@ -40,41 +42,53 @@ const emptyDragImage = (() => {
 function ThemeToggleButton() {
   const isDark = useThemeStore((s) => s.mode) === "dark"
   return (
-    <button
-      onClick={() => {
-        const { mode, setMode } = useThemeStore.getState()
-        setMode(mode === "dark" ? "light" : "dark")
-      }}
-      title={isDark ? "切换为明亮" : "切换为暗黑"}
-      className="-mr-1.5 rounded-md p-1 text-foreground transition-colors hover:bg-muted"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-        <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
-        <path d="M12 3l0 18" />
-        <path d="M12 9l4.65 -4.65" />
-        <path d="M12 14.3l7.37 -7.37" />
-        <path d="M12 19.6l8.85 -8.85" />
-      </svg>
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            onClick={() => {
+              const { mode, setMode } = useThemeStore.getState()
+              setMode(mode === "dark" ? "light" : "dark")
+            }}
+            className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+          />
+        }
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+          <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+          <path d="M12 3l0 18" />
+          <path d="M12 9l4.65 -4.65" />
+          <path d="M12 14.3l7.37 -7.37" />
+          <path d="M12 19.6l8.85 -8.85" />
+        </svg>
+      </TooltipTrigger>
+      <TooltipContent>{isDark ? "切换为明亮" : "切换为暗黑"}</TooltipContent>
+    </Tooltip>
   )
 }
 
 function TourReplayButton() {
   const { isActive } = useTour()
   return (
-    <button
-      id="tour-replay"
-      onClick={() => {
-        if (isActive) return
-        window.dispatchEvent(new CustomEvent("risu-tour-replay"))
-      }}
-      title="功能引导"
-      className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-      aria-label="功能引导"
-    >
-      <CircleHelp className="size-[18px]" />
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            id="tour-replay"
+            onClick={() => {
+              if (isActive) return
+              window.dispatchEvent(new CustomEvent("risu-tour-replay"))
+            }}
+            className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="功能引导"
+          />
+        }
+      >
+        <CircleHelp className="size-[18px]" />
+      </TooltipTrigger>
+      <TooltipContent>功能引导</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -415,6 +429,35 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
           <div className="flex items-center gap-0.5">
             <TourReplayButton />
             <ThemeToggleButton />
+            <HoverCard>
+              <HoverCardTrigger
+                render={
+                  <a
+                    href="https://xhslink.com/m/4vWuwtptST2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="-mr-1.5 rounded-md p-1 transition-colors hover:bg-muted"
+                    aria-label="小红书"
+                  />
+                }
+              >
+                <img src="/xiaohongshu.svg" alt="小红书" className="size-[18px]" />
+              </HoverCardTrigger>
+              <HoverCardContent side="bottom" align="end">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
+                    <div>
+                      <p className="text-sm font-semibold">RiSu 小红书</p>
+                      <p className="text-xs text-muted-foreground">@RiSu官方账号</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    关注我们的小红书，获取最新的模型展示、搭配灵感和使用技巧！
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           </div>
         </div>
         <div className="mt-4">
