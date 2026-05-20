@@ -424,12 +424,12 @@ function MobileTopBar() {
                   if (isActive) return
                   window.dispatchEvent(new CustomEvent("risu-tour-replay"))
                 }}
-                className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+                className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
                 aria-label="功能引导"
               />
             }
           >
-            <CircleHelp className="size-4" />
+            <CircleHelp className="size-[18px]" />
           </TooltipTrigger>
           <TooltipContent>功能引导</TooltipContent>
         </Tooltip>
@@ -439,11 +439,11 @@ function MobileTopBar() {
               render={
                 <button
                   onClick={toggleFullscreen}
-                  className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+                  className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
                 />
               }
             >
-              {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+              {isFullscreen ? <Minimize className="size-[18px]" /> : <Maximize className="size-[18px]" />}
             </TooltipTrigger>
             <TooltipContent>{isFullscreen ? "退出全屏" : "全屏"}</TooltipContent>
           </Tooltip>
@@ -456,12 +456,12 @@ function MobileTopBar() {
                   const { mode, setMode } = useThemeStore.getState()
                   setMode(mode === "dark" ? "light" : "dark")
                 }}
-                className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+                className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
                 aria-label="切换主题"
               />
             }
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path stroke="none" d="M0 0h24v24H0z" fill="none" />
               <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
               <path d="M12 3l0 18" />
@@ -479,12 +479,12 @@ function MobileTopBar() {
                 href="https://xhslink.com/m/4vWuwtptST2"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md p-1 transition-colors hover:bg-muted"
+                className="rounded-md p-1.5 transition-colors hover:bg-muted"
                 aria-label="小红书"
               />
             }
           >
-            <img src="/xiaohongshu.svg" alt="小红书" className="size-4" />
+            <img src="/xiaohongshu.svg" alt="小红书" className="size-[18px]" />
           </HoverCardTrigger>
           <HoverCardContent side="bottom" align="end">
             <div className="flex flex-col gap-2">
