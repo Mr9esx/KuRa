@@ -4,6 +4,7 @@ import { TourProvider, TourAlertDialog, useTour } from "@/components/tour"
 import { useLayoutMode } from "@/hooks/use-layout-mode"
 import { getTourSteps, TOUR_STORAGE_KEY } from "@/config/tour"
 import { useCatalog } from "@/hooks/use-catalog"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 let themeInitialized = false
 
@@ -69,5 +70,9 @@ export function Providers({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  return <TourWrapper>{children}</TourWrapper>
+  return (
+    <TooltipProvider>
+      <TourWrapper>{children}</TourWrapper>
+    </TooltipProvider>
+  )
 }
