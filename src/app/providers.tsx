@@ -9,14 +9,16 @@ let themeInitialized = false
 
 function TourDialog() {
   const { setIsTourCompleted } = useTour()
+  const { loading } = useCatalog()
   const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
+    if (loading) return
     const completed = localStorage.getItem(TOUR_STORAGE_KEY) === "true"
     if (!completed) {
       setDialogOpen(true)
     }
-  }, [])
+  }, [loading])
 
   useEffect(() => {
     const handleReplay = () => {
@@ -41,14 +43,9 @@ function TourDialog() {
 function TourWrapper({ children }: { children: ReactNode }) {
   const mode = useLayoutMode()
   const isMobile = mode === "mobile"
-  const { loading } = useCatalog()
 
   const completed = typeof window !== "undefined" && localStorage.getItem(TOUR_STORAGE_KEY) === "true"
   const steps = getTourSteps(isMobile)
-
-  if (loading) {
-    return <>{children}</>
-  }
 
   return (
     <TourProvider
