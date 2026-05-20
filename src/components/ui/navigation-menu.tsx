@@ -10,10 +10,15 @@ function NavigationMenu({
   side,
   sideOffset = 8,
   className,
+  positionerClassName,
+  popupClassName,
   children,
   ...props
 }: NavigationMenuPrimitive.Root.Props &
-  Pick<NavigationMenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+  Pick<NavigationMenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset"> & {
+  positionerClassName?: string
+  popupClassName?: string
+}) {
   return (
     <NavigationMenuPrimitive.Root
       data-slot="navigation-menu"
@@ -29,6 +34,8 @@ function NavigationMenu({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        className={positionerClassName}
+        popupClassName={popupClassName}
       />
     </NavigationMenuPrimitive.Root>
   )
@@ -102,12 +109,13 @@ function NavigationMenuContent({
 
 function NavigationMenuPositioner({
   className,
+  popupClassName,
   side = "bottom",
   sideOffset = 8,
   align = "start",
   alignOffset = 0,
   ...props
-}: NavigationMenuPrimitive.Positioner.Props) {
+}: NavigationMenuPrimitive.Positioner.Props & { popupClassName?: string }) {
   return (
     <NavigationMenuPrimitive.Portal>
       <NavigationMenuPrimitive.Positioner
@@ -116,12 +124,12 @@ function NavigationMenuPositioner({
         align={align}
         alignOffset={alignOffset}
         className={cn(
-          "isolate z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:right-0 data-[side=bottom]:before:left-0",
+          "isolate z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom] duration-200 ease-out data-instant:transition-none data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:right-0 data-[side=bottom]:before:left-0",
           className
         )}
         {...props}
       >
-        <NavigationMenuPrimitive.Popup className="data-[ending-style]:easing-[ease] xs:w-(--popup-width) relative h-(--popup-height) w-(--popup-width) origin-(--transform-origin) rounded-lg bg-popover text-popover-foreground shadow ring-1 ring-foreground/10 transition-[opacity,transform,scale,translate] duration-200 ease-out outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-ending-style:duration-100 data-starting-style:scale-95 data-starting-style:opacity-0">
+        <NavigationMenuPrimitive.Popup className={cn("data-[ending-style]:easing-[ease] xs:w-(--popup-width) relative h-(--popup-height) w-(--popup-width) origin-(--transform-origin) rounded-lg bg-popover text-popover-foreground shadow ring-1 ring-foreground/10 transition-[opacity,transform,width,height,scale,translate] duration-200 ease-out outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-ending-style:duration-100 data-starting-style:scale-95 data-starting-style:opacity-0", popupClassName)}>
           <NavigationMenuPrimitive.Viewport className="relative size-full overflow-hidden" />
         </NavigationMenuPrimitive.Popup>
       </NavigationMenuPrimitive.Positioner>

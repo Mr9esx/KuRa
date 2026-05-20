@@ -27,11 +27,14 @@ export interface CatalogData {
   presets: Preset[]
 }
 
+const MOCK_DELAY_MS = 300
+
 export async function fetchCatalog(): Promise<CatalogData> {
   const [blocks, items, presets] = await Promise.all([
     fetchBlocks(),
     fetchItems(),
     fetchPresets(),
+    new Promise((r) => setTimeout(r, MOCK_DELAY_MS)),
   ])
   const categories = ["全部", ...new Set(items.flatMap((i) => i.categories))]
   return { blocks, items, categories, presets }

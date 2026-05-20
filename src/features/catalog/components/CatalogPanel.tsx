@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { useCatalog } from "@/hooks/use-catalog"
+import { useTour } from "@/components/tour"
 import { MobileActionBar } from "@/features/viewport"
+import { Skeleton } from "@/components/ui/skeleton"
+import { CircleHelp } from "lucide-react"
+import { TOUR_STORAGE_KEY } from "@/config/tour"
 import type { CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
 
@@ -56,7 +60,27 @@ function ThemeToggleButton() {
   )
 }
 
-export { ThemeToggleButton }
+function TourReplayButton() {
+  const { startTour, setIsTourCompleted, isActive } = useTour()
+  return (
+    <button
+      id="tour-replay"
+      onClick={() => {
+        if (isActive) return
+        localStorage.removeItem(TOUR_STORAGE_KEY)
+        setIsTourCompleted(false)
+        setTimeout(() => startTour("main"), 50)
+      }}
+      title="功能引导"
+      className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+      aria-label="功能引导"
+    >
+      <CircleHelp className="size-[18px]" />
+    </button>
+  )
+}
+
+export { ThemeToggleButton, TourReplayButton }
 
 interface CatalogPanelProps {
   narrow?: boolean
@@ -161,16 +185,87 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   const cols = narrow ? 1 : 2
 
   if (loading) {
+    if (mobile) {
+      return (
+        <div className="flex h-full flex-col overflow-hidden border-t border-border bg-background">
+          <div className="flex items-center gap-2 px-4 pt-2 pb-1">
+            <div className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
+              <Skeleton className="h-7 rounded-lg" />
+              <Skeleton className="h-7 rounded-lg" />
+            </div>
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="size-9 rounded-md" />
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2 px-4 pt-3 pb-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-7 w-16 shrink-0 rounded-full" />
+            ))}
+          </div>
+          <div className="grid gap-2 px-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-border p-2">
+                <Skeleton className="mb-1.5 aspect-square w-full rounded-md" />
+                <Skeleton className="h-3 w-3/4 rounded" />
+                <Skeleton className="mt-1 h-2.5 w-1/2 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
     return (
-      <div className="flex h-full w-72 items-center justify-center border-r border-border bg-background">
-        <p className="text-xs text-muted-foreground">加载目录中…</p>
+      <div className={cn(
+        "flex h-full flex-col border-r border-border bg-background",
+        narrow ? "w-56" : "w-72",
+      )}>
+        <div className="px-4 pt-4 pb-2">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-16 rounded" />
+            <Skeleton className="size-7 rounded-md" />
+          </div>
+          <div className="mt-4">
+            <Skeleton className="mb-2 h-3 w-12 rounded" />
+            <div className="flex gap-1">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-7 w-14 rounded-md" />
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <Skeleton className="mb-2 h-3 w-16 rounded" />
+            <div className="flex gap-1">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-6 w-12 rounded-full" />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="px-4 pt-2">
+          <Skeleton className="mb-2 h-3 w-10 rounded" />
+          <div className={cn("grid gap-2", narrow ? "grid-cols-1" : "grid-cols-2")}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-border p-2.5">
+                <Skeleton className="mb-2 aspect-square w-full rounded-md" />
+                <Skeleton className="h-3 w-3/4 rounded" />
+                <Skeleton className="mt-1 h-2.5 w-1/2 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="flex h-full w-72 items-center justify-center border-r border-border bg-background">
+      <div className={cn(
+        "flex h-full items-center justify-center border-r border-border bg-background",
+        mobile ? "w-full" : narrow ? "w-56" : "w-72",
+      )}>
         <p className="text-xs text-destructive">目录加载失败</p>
       </div>
     )
@@ -182,7 +277,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     return (
       <div className="flex h-full flex-col overflow-hidden border-t border-border bg-background">
         <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-          <div className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
+          <div id="tour-m-block-picker" className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
             <button
               onClick={() => setMobileTab("items")}
               className={cn(
@@ -217,7 +312,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
             )}
           >
             <div className="flex w-1/2 flex-col">
-              <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-4 pb-3">
+              <div id="tour-m-categories" className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-4 pb-3">
                 {categories.map((cat) => (
                   <button
                     key={cat}
@@ -234,7 +329,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                 ))}
               </div>
 
-              <div className="catalog-scroll no-scrollbar flex-1 overflow-y-auto px-4 pb-4 pt-1">
+              <div id="tour-m-catalog-items" className="catalog-scroll no-scrollbar flex-1 overflow-y-auto px-4 pb-4 pt-1">
                 <div
                   className="grid gap-2"
                   style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}
@@ -319,11 +414,14 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
           <span className="text-lg font-semibold tracking-tight">RiSu</span>
-          <ThemeToggleButton />
+          <div className="flex items-center gap-0.5">
+            <TourReplayButton />
+            <ThemeToggleButton />
+          </div>
         </div>
         <div className="mt-4">
           <div className="mb-2 text-[11px] font-medium text-muted-foreground">框体尺寸</div>
-          <div className="inline-flex rounded-lg border border-border p-0.5">
+          <div id="tour-block-picker" className="inline-flex rounded-lg border border-border p-0.5">
             {blocks.map((b) => (
               <button
                 key={b.sku}
@@ -343,7 +441,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
         <div className="mt-4">
           <div className="mb-2 text-[11px] font-medium text-muted-foreground">收纳件分类</div>
-          <div className="no-scrollbar flex gap-1 overflow-x-auto">
+          <div id="tour-categories" className="no-scrollbar flex gap-1 overflow-x-auto">
             {categories.map((cat) => (
               <button
                 key={cat}
@@ -363,7 +461,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       </div>
 
       {/* Grouped items */}
-      <div className="catalog-scroll no-scrollbar flex-1 overflow-y-auto px-4 pb-4">
+      <div id="tour-catalog-items" className="catalog-scroll no-scrollbar flex-1 overflow-y-auto px-4 pb-4">
         {groups.map((group) => (
           <div key={group.category} className="mt-3 first:mt-1">
             <div className="pb-1.5 text-[11px] font-medium text-muted-foreground">
