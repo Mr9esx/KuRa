@@ -1,6 +1,6 @@
-# RiSu
+# KuRa
 
-RiSu 是一个基于 React + Three.js 的 3D 收纳编辑器，用于在网格化空间中摆放、移动和管理物品布局。
+KuRa 是一个基于 React + Three.js 的 3D 收纳编辑器，用于在网格化空间中摆放、移动和管理物品布局。
 
 ## 功能概览
 
@@ -58,7 +58,7 @@ npm run test
 ## 目录结构
 
 ```text
-risu/
+kura/
 ├── docs/                    # 产品与技术文档
 ├── public/                  # 静态资源
 ├── deploy/                  # 服务器部署脚本和 Nginx 配置

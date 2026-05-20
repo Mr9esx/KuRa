@@ -93,7 +93,7 @@ function TourReplayButton() {
             id="tour-replay"
             onClick={() => {
               if (isActive) return
-              window.dispatchEvent(new CustomEvent("risu-tour-replay"))
+              window.dispatchEvent(new CustomEvent("kura-tour-replay"))
             }}
             className="rounded-md p-1 text-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="功能引导"
@@ -157,7 +157,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
         longPressTimerRef.current = null
         selectItem(null)
         window.dispatchEvent(
-          new CustomEvent("risu:drag-item-start", { detail: { sku } }),
+          new CustomEvent("kura:drag-item-start", { detail: { sku } }),
         )
       }, 300)
     },
@@ -214,16 +214,16 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
   const handleDragStart = (e: DragEvent<HTMLButtonElement>, sku: string) => {
     e.dataTransfer.effectAllowed = "copy"
-    e.dataTransfer.setData("application/x-risu-sku", sku)
+    e.dataTransfer.setData("application/x-kura-sku", sku)
     e.dataTransfer.setData("text/plain", sku)
     e.dataTransfer.setDragImage(emptyDragImage, 0, 0)
     window.dispatchEvent(
-      new CustomEvent("risu:drag-item-start", { detail: { sku } }),
+      new CustomEvent("kura:drag-item-start", { detail: { sku } }),
     )
   }
 
   const handleDragEnd = () => {
-    window.dispatchEvent(new Event("risu:drag-item-end"))
+    window.dispatchEvent(new Event("kura:drag-item-end"))
   }
 
   const handleBlockSelect = useCallback(
@@ -598,7 +598,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold tracking-tight">RiSu</span>
+          <span className="text-lg font-semibold tracking-tight">KuRa</span>
           <div className="flex items-center gap-0.5">
             <TourReplayButton />
             <ThemeToggleButton />
@@ -621,8 +621,8 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   <div className="flex items-center gap-2">
                     <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
                     <div>
-                      <p className="text-sm font-semibold">RiSu 小红书</p>
-                      <p className="text-xs text-muted-foreground">@RiSu官方账号</p>
+                      <p className="text-sm font-semibold">KuRa 小红书</p>
+                      <p className="text-xs text-muted-foreground">@KuRa官方账号</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">

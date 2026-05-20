@@ -415,7 +415,7 @@ function MobileTopBar() {
   const { isFullscreen, toggle: toggleFullscreen, supported: fullscreenSupported } = useFullscreen()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
-      <span className="text-sm font-semibold tracking-tight">RiSu</span>
+      <span className="text-sm font-semibold tracking-tight">KuRa</span>
       <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger
@@ -424,7 +424,7 @@ function MobileTopBar() {
                 id="tour-m-replay"
                 onClick={() => {
                   if (isActive) return
-                  window.dispatchEvent(new CustomEvent("risu-tour-replay"))
+                  window.dispatchEvent(new CustomEvent("kura-tour-replay"))
                 }}
                 className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
                 aria-label="功能引导"
@@ -493,8 +493,8 @@ function MobileTopBar() {
               <div className="flex items-center gap-2">
                 <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
                 <div>
-                  <p className="text-sm font-semibold">RiSu 小红书</p>
-                  <p className="text-xs text-muted-foreground">@RiSu官方账号</p>
+                  <p className="text-sm font-semibold">KuRa 小红书</p>
+                  <p className="text-xs text-muted-foreground">@KuRa官方账号</p>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -553,7 +553,7 @@ export function MobileActionBar() {
       placements,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `risu-model-mock-${Date.now()}.json`)
+    saveAs(blob, `kura-model-mock-${Date.now()}.json`)
   }
 
   const exportShoppingList = () => {
@@ -573,7 +573,7 @@ export function MobileActionBar() {
       items: list,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `risu-shopping-list-${Date.now()}.json`)
+    saveAs(blob, `kura-shopping-list-${Date.now()}.json`)
   }
 
   const exportAllMock = async () => {
@@ -601,7 +601,7 @@ export function MobileActionBar() {
     zip.file("model.mock.json", JSON.stringify(model, null, 2))
     zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
     const blob = await zip.generateAsync({ type: "blob" })
-    saveAs(blob, `risu-export-${Date.now()}.zip`)
+    saveAs(blob, `kura-export-${Date.now()}.zip`)
   }
 
   const iconTrigger =
@@ -834,7 +834,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       placements,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `risu-model-mock-${Date.now()}.json`)
+    saveAs(blob, `kura-model-mock-${Date.now()}.json`)
   }
 
   const exportShoppingList = () => {
@@ -854,7 +854,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       items: list,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `risu-shopping-list-${Date.now()}.json`)
+    saveAs(blob, `kura-shopping-list-${Date.now()}.json`)
   }
 
   const exportAllMock = async () => {
@@ -882,7 +882,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     zip.file("model.mock.json", JSON.stringify(model, null, 2))
     zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
     const blob = await zip.generateAsync({ type: "blob" })
-    saveAs(blob, `risu-export-${Date.now()}.zip`)
+    saveAs(blob, `kura-export-${Date.now()}.zip`)
   }
 
   if (mobile) return <MobileTopBar />
@@ -1168,11 +1168,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       setHoveredCell(null)
     }
 
-    window.addEventListener("risu:drag-item-start", onStart as EventListener)
-    window.addEventListener("risu:drag-item-end", onEnd)
+    window.addEventListener("kura:drag-item-start", onStart as EventListener)
+    window.addEventListener("kura:drag-item-end", onEnd)
     return () => {
-      window.removeEventListener("risu:drag-item-start", onStart as EventListener)
-      window.removeEventListener("risu:drag-item-end", onEnd)
+      window.removeEventListener("kura:drag-item-start", onStart as EventListener)
+      window.removeEventListener("kura:drag-item-end", onEnd)
       cleanupTouch()
     }
   }, [resolveDropCell, setHoveredCell, placeItemBySku])
@@ -1187,7 +1187,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     const sku = draggingSku ||
-      e.dataTransfer.getData("application/x-risu-sku") ||
+      e.dataTransfer.getData("application/x-kura-sku") ||
       e.dataTransfer.getData("text/plain")
     if (!sku) {
       setHoveredCell(null)

@@ -7,7 +7,7 @@ interface ThemeState {
   setMode: (mode: ThemeMode) => void
 }
 
-const STORAGE_KEY = "risu-theme"
+const STORAGE_KEY = "kura-theme"
 
 function getInitialMode(): ThemeMode {
   const stored = localStorage.getItem(STORAGE_KEY)

@@ -18,7 +18,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { Torus, X, CircleHelp } from "lucide-react";
+import { X, CircleHelp } from "lucide-react";
+import { KuRaLogo } from "@/components/brand/kura-logo";
 
 
 export interface TourStep {
@@ -500,8 +501,8 @@ export function TourAlertDialog({ isOpen, setIsOpen, tourId }: { isOpen: boolean
               animate={{
                 scale: 1,
                 filter: "blur(0px)",
-                y: [0, -8, 0],
-                rotate: [42, 48, 42],
+                y: [0, -6, 0],
+                rotate: [0, 4, 0, -4, 0],
               }}
               transition={{
                 duration: 0.4,
@@ -512,17 +513,17 @@ export function TourAlertDialog({ isOpen, setIsOpen, tourId }: { isOpen: boolean
                   ease: "easeInOut",
                 },
                 rotate: {
-                  duration: 3,
+                  duration: 3.4,
                   repeat: Infinity,
                   ease: "easeInOut",
                 },
               }}
             >
-              <Torus className="size-32 stroke-1 text-primary" />
+              <KuRaLogo className="size-32" />
             </motion.div>
           </div>
           <AlertDialogTitle className="text-xl font-medium">
-            欢迎使用 RiSu
+            欢迎使用 KuRa
           </AlertDialogTitle>
           <AlertDialogDescription className="mt-2 text-sm text-muted-foreground">
             快速了解核心功能，帮助你高效设计收纳方案。
