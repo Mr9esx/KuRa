@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, type DragEvent } from "react"
+import { useRef, useEffect, useCallback, useState, type DragEvent } from "react"
 import * as THREE from "three"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
@@ -132,9 +132,11 @@ function useIsDark() {
 function Scene({
   previewSku,
   dragging,
+  mobile,
 }: {
   previewSku: string | null
   dragging: boolean
+  mobile?: boolean
 }) {
   const block = useEditorStore((s) => s.block)
   const placements = useEditorStore((s) => s.placements)
@@ -156,7 +158,8 @@ function Scene({
   const itemMat = getMaterialColor(itemColorId)
   const activeSku = previewSku ?? selectedSku
   const selectedItem = activeSku ? findItemBySku(activeSku) : undefined
-  const controlsEnabled = !dragging && !draggingPlacementId
+  const inPlacementMode = mobile && !!selectedSku
+  const controlsEnabled = !dragging && !draggingPlacementId && !inPlacementMode
 
   const deg = (d: number) => (d * Math.PI) / 180
 
@@ -190,7 +193,7 @@ function Scene({
         makeDefault
         minPolarAngle={deg(10)}
         maxPolarAngle={deg(80)}
-        minDistance={150}
+        minDistance={mobile ? 100 : 150}
         maxDistance={800}
         enableDamping
         dampingFactor={0.1}
@@ -649,7 +652,6 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
 export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
-  const block = useEditorStore((s) => s.block)
   const setHoveredCell = useEditorStore((s) => s.setHoveredCell)
   const placeItemBySku = useEditorStore((s) => s.placeItemBySku)
   const cameraRef = useRef<THREE.Camera | null>(null)
@@ -659,6 +661,31 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     cameraRef.current = camera
     canvasRef.current = canvas
   }
+
+  const resolveDropCell = useCallback((clientX: number, clientY: number): [number, number] | null => {
+    const camera = cameraRef.current
+    const canvas = canvasRef.current
+    if (!camera || !canvas) return null
+
+    const rect = canvas.getBoundingClientRect()
+    const x = ((clientX - rect.left) / rect.width) * 2 - 1
+    const y = -((clientY - rect.top) / rect.height) * 2 + 1
+    const raycaster = new THREE.Raycaster()
+    raycaster.setFromCamera(new THREE.Vector2(x, y), camera)
+
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2)
+    const point = new THREE.Vector3()
+    const hit = raycaster.ray.intersectPlane(plane, point)
+    if (!hit) return null
+
+    const block = useEditorStore.getState().block
+    const [innerW, innerD] = block.innerSize
+    const [cols, rows] = block.cellGrid
+    const col = Math.floor((point.x + innerW / 2) / CELL_SIZE)
+    const row = Math.floor((point.z + innerD / 2) / CELL_SIZE)
+    if (col < 0 || col >= cols || row < 0 || row >= rows) return null
+    return [col, row]
+  }, [])
 
   useEffect(() => {
     const onStart = (event: Event) => {
@@ -677,30 +704,36 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     }
   }, [setHoveredCell])
 
-  const resolveDropCell = (clientX: number, clientY: number): [number, number] | null => {
-    const camera = cameraRef.current
-    const canvas = canvasRef.current
-    if (!camera || !canvas) return null
+  // Mobile: track touch across regions during long-press drag
+  useEffect(() => {
+    if (!draggingSku) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = ((clientX - rect.left) / rect.width) * 2 - 1
-    const y = -((clientY - rect.top) / rect.height) * 2 + 1
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(new THREE.Vector2(x, y), camera)
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault()
+      const touch = e.touches[0]
+      const cell = resolveDropCell(touch.clientX, touch.clientY)
+      setHoveredCell(cell)
+    }
 
-    // CellGrid interaction plane is rendered at y = 0.2
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2)
-    const point = new THREE.Vector3()
-    const hit = raycaster.ray.intersectPlane(plane, point)
-    if (!hit) return null
+    const onTouchEnd = () => {
+      const hoveredCell = useEditorStore.getState().hoveredCell
+      if (hoveredCell && draggingSku) {
+        placeItemBySku(draggingSku, hoveredCell[0], hoveredCell[1])
+      }
+      setDraggingSku(null)
+      setHoveredCell(null)
+      window.dispatchEvent(new Event("risu:drag-item-end"))
+    }
 
-    const [innerW, innerD] = block.innerSize
-    const [cols, rows] = block.cellGrid
-    const col = Math.floor((point.x + innerW / 2) / CELL_SIZE)
-    const row = Math.floor((point.z + innerD / 2) / CELL_SIZE)
-    if (col < 0 || col >= cols || row < 0 || row >= rows) return null
-    return [col, row]
-  }
+    window.addEventListener("touchmove", onTouchMove, { passive: false })
+    window.addEventListener("touchend", onTouchEnd)
+    window.addEventListener("touchcancel", onTouchEnd)
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove)
+      window.removeEventListener("touchend", onTouchEnd)
+      window.removeEventListener("touchcancel", onTouchEnd)
+    }
+  }, [draggingSku, resolveDropCell, setHoveredCell, placeItemBySku])
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -729,6 +762,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     setDraggingSku(null)
   }
 
+  const cameraFov = mobile ? 50 : 45
+  const cameraPosition: [number, number, number] = mobile
+    ? [200, 180, 200]
+    : [280, 250, 280]
+
   return (
     <div
       className="relative h-full w-full bg-[#faf9f7] dark:bg-[#1a1a1a]"
@@ -737,10 +775,10 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       onDragLeave={() => setHoveredCell(null)}
     >
       <Canvas
-        camera={{ fov: 45, position: [280, 250, 280], near: 1, far: 2000 }}
+        camera={{ fov: cameraFov, position: cameraPosition, near: 1, far: 2000 }}
         gl={{ antialias: true }}
       >
-        <Scene previewSku={draggingSku} dragging={!!draggingSku} />
+        <Scene previewSku={draggingSku} dragging={!!draggingSku} mobile={mobile} />
         <SceneBridge onReady={bindSceneContext} />
         <FpsTracker onUpdate={setFps} />
       </Canvas>
