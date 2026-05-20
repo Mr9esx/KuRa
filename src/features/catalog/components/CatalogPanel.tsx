@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { useCatalog } from "@/hooks/use-catalog"
+import { MobileActionBar } from "@/features/viewport"
 import type { CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
 
@@ -180,8 +181,8 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   if (mobile) {
     return (
       <div className="flex h-full flex-col overflow-hidden border-t border-border bg-background">
-        <div className="px-4 pt-2 pb-1">
-          <div className="grid w-full grid-cols-2 rounded-xl border border-border p-1">
+        <div className="flex items-center gap-2 px-4 pt-2 pb-1">
+          <div className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
             <button
               onClick={() => setMobileTab("items")}
               className={cn(
@@ -205,6 +206,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
               框体
             </button>
           </div>
+          <MobileActionBar />
         </div>
 
         <div className="relative flex-1 overflow-hidden">

@@ -1,1 +1,1 @@
-export { Viewport } from "./components/Viewport"
+export { Viewport, MobileActionBar } from "./components/Viewport"
