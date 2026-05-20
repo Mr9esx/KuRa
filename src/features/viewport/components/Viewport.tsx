@@ -12,7 +12,7 @@ import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
 import type { Preset } from "@/types/catalog"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp, Maximize, Minimize } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTour } from "@/components/tour"
 import { TOUR_STORAGE_KEY } from "@/config/tour"
@@ -376,8 +376,31 @@ function PresetSelector({
   )
 }
 
+function useFullscreen() {
+  const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement)
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener("fullscreenchange", onChange)
+    return () => document.removeEventListener("fullscreenchange", onChange)
+  }, [])
+
+  const toggle = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {})
+    }
+  }, [])
+
+  const supported = typeof document.documentElement.requestFullscreen === "function"
+
+  return { isFullscreen, toggle, supported }
+}
+
 function MobileTopBar() {
-  const { startTour, setIsTourCompleted, isActive } = useTour()
+  const { isActive } = useTour()
+  const { isFullscreen, toggle: toggleFullscreen, supported: fullscreenSupported } = useFullscreen()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
       <span className="text-sm font-semibold tracking-tight">RiSu</span>
@@ -386,15 +409,22 @@ function MobileTopBar() {
           id="tour-m-replay"
           onClick={() => {
             if (isActive) return
-            localStorage.removeItem(TOUR_STORAGE_KEY)
-            setIsTourCompleted(false)
-            setTimeout(() => startTour("main"), 50)
+            window.dispatchEvent(new CustomEvent("risu-tour-replay"))
           }}
-          className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
           aria-label="功能引导"
         >
           <CircleHelp className="size-4" />
         </button>
+        {fullscreenSupported && (
+          <button
+            onClick={toggleFullscreen}
+            className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+            aria-label={isFullscreen ? "退出全屏" : "全屏"}
+          >
+            {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+          </button>
+        )}
         <button
           onClick={() => {
             const { mode, setMode } = useThemeStore.getState()

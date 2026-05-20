@@ -13,7 +13,6 @@ import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -21,9 +20,6 @@ import { cn } from "@/lib/utils";
 
 import { Torus, X, CircleHelp } from "lucide-react";
 
-function CircleHelpIcon() {
-  return <CircleHelp className="inline size-3.5 text-muted-foreground" />;
-}
 
 export interface TourStep {
   content: React.ReactNode;
@@ -172,8 +168,9 @@ export function TourProvider({
 
   useEffect(() => {
     if (!contentRef.current) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (contentTransitioning.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (contentTransitioning.current || !entry) return;
       setContentSize({
         width: entry.contentRect.width,
         height: entry.contentRect.height,
@@ -236,8 +233,6 @@ export function TourProvider({
   }, [onSkip, activeTourId, currentStep]);
 
   const startTour = useCallback((tourId?: string) => {
-    if (isCompleted) return;
-
     if (tourId && tours) {
       const tour = tours.find((t) => t.id === tourId);
       if (!tour) return;
@@ -251,7 +246,7 @@ export function TourProvider({
 
     setCurrentStep(0);
     onStart?.(tourId ?? activeTourId ?? "default");
-  }, [isCompleted, tours, onStart, activeTourId]);
+  }, [tours, onStart, activeTourId]);
 
   useEffect(() => {
     if (currentStep < 0) return;
@@ -486,9 +481,9 @@ export function useTour() {
 }
 
 export function TourAlertDialog({ isOpen, setIsOpen, tourId }: { isOpen: boolean, setIsOpen: (isOpen: boolean) => void, tourId?: string }) {
-  const { startTour, isTourCompleted, currentStep } = useTour();
+  const { startTour, currentStep } = useTour();
 
-  if (isTourCompleted || currentStep > -1) {
+  if (currentStep > -1) {
     return null;
   }
   const handleSkip = async () => {

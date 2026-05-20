@@ -61,15 +61,13 @@ function ThemeToggleButton() {
 }
 
 function TourReplayButton() {
-  const { startTour, setIsTourCompleted, isActive } = useTour()
+  const { isActive } = useTour()
   return (
     <button
       id="tour-replay"
       onClick={() => {
         if (isActive) return
-        localStorage.removeItem(TOUR_STORAGE_KEY)
-        setIsTourCompleted(false)
-        setTimeout(() => startTour("main"), 50)
+        window.dispatchEvent(new CustomEvent("risu-tour-replay"))
       }}
       title="功能引导"
       className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
