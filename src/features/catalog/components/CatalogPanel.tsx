@@ -341,11 +341,8 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                 ))}
               </div>
 
-              <div id="tour-m-catalog-items" className="catalog-scroll no-scrollbar flex-1 overflow-y-auto px-4 pb-4 pt-1">
-                <div
-                  className="grid gap-2"
-                  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}
-                >
+              <div id="tour-m-catalog-items" className="no-scrollbar flex-1 overflow-x-auto overscroll-contain px-4 pb-4 pt-1">
+                <div className="flex h-full gap-2">
                   {filteredItems.map((item) => (
                     <button
                       key={item.sku}
@@ -355,7 +352,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       onTouchEnd={handleTouchEnd}
                       onTouchCancel={handleTouchEnd}
                       className={cn(
-                        "group flex flex-col rounded-lg border p-2 text-left transition-all",
+                        "group flex h-full shrink-0 w-[110px] flex-col rounded-lg border p-2 text-left transition-all",
                         selectedSku === item.sku
                           ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
                           : "border-border hover:border-foreground/30 hover:bg-muted/50",
@@ -387,7 +384,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
               </div>
             </div>
 
-            <div className="catalog-scroll no-scrollbar w-1/2 overflow-y-auto px-4 pb-4">
+            <div className="catalog-scroll no-scrollbar w-1/2 overflow-y-auto overscroll-contain px-4 pb-4">
               <div className="grid grid-cols-3 gap-2 pt-3">
                 {blocks.map((b) => (
                   <button
@@ -502,7 +499,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       </div>
 
       {/* Grouped items */}
-      <div id="tour-catalog-items" className="catalog-scroll no-scrollbar flex-1 overflow-y-auto px-4 pb-4">
+      <div id="tour-catalog-items" className="catalog-scroll no-scrollbar flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
         {groups.map((group) => (
           <div key={group.category} className="mt-3 first:mt-1">
             <div className="pb-1.5 text-[11px] font-medium text-muted-foreground">

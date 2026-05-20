@@ -124,11 +124,13 @@
   body {
     @apply bg-background text-foreground;
     margin: 0;
+    overscroll-behavior: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   html {
     @apply font-sans;
+    overscroll-behavior: none;
   }
   #root {
     width: 100%;
