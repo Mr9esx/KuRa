@@ -287,7 +287,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
   if (mobile) {
     return (
-      <div className="flex h-full flex-col overflow-hidden border-t border-border bg-background">
+      <div className="flex flex-col overflow-hidden border-t border-border bg-background">
         <div className="flex items-center gap-2 px-4 pt-2 pb-1">
           <div id="tour-m-block-picker" className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
             <button
@@ -316,7 +316,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
           <MobileActionBar />
         </div>
 
-        <div className="relative flex-1 overflow-hidden">
+        <div className="relative h-[220px] overflow-hidden">
           <div
             className={cn(
               "absolute inset-0 flex w-[200%] transition-transform duration-300 ease-out",
