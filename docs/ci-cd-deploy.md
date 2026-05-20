@@ -6,7 +6,22 @@
 
 - `DEPLOY_HOST`: `118.196.126.221`
 - `DEPLOY_USER`: `root`
-- `DEPLOY_PASSWORD`: 你的服务器密码
+- `DEPLOY_KEY`: SSH 私钥内容（见下方生成方式）
+
+### 生成 SSH 密钥对
+
+```bash
+# 本地生成密钥对（无需设置密码短语）
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/deploy_key
+
+# 将公钥添加到服务器
+ssh-copy-id -i ~/.ssh/deploy_key.pub root@118.196.126.221
+
+# 查看私钥内容，复制到 GitHub Secret DEPLOY_KEY 中
+cat ~/.ssh/deploy_key
+```
+
+> 注意：复制私钥时需要包含 `-----BEGIN OPENSSH PRIVATE KEY-----` 和 `-----END OPENSSH PRIVATE KEY-----` 这两行。
 
 ## 2. 自动流程
 
