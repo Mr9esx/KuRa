@@ -8,7 +8,7 @@ const FALLBACK_BLOCK: BlockCatalogItem = {
   sku: "41001",
   name: "标准主框体",
   type: "block",
-  categories: ["框体"],
+  categories: ["基础框体"],
   gridSize: [6, 4],
   height: 72,
   innerSize: [240, 160],

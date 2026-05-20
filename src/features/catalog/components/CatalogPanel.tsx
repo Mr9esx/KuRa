@@ -7,9 +7,9 @@ import { MobileActionBar } from "@/features/viewport"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
+import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
-import { TOUR_STORAGE_KEY } from "@/config/tour"
-import type { CatalogItem } from "@/types/catalog"
+import type { BlockCatalogItem, CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
 
 function groupByCategory(items: CatalogItem[], activeCategory: string) {
@@ -38,6 +38,21 @@ const emptyDragImage = (() => {
   canvas.height = 1
   return canvas
 })()
+
+function getItemImageSrc(item: CatalogItem): string | null {
+  if (!item.imagePath) return null
+  const base = import.meta.env.BASE_URL
+  return `${base}${item.imagePath.replace(/^\//, "")}`
+}
+
+function getSafeGridSize(item: CatalogItem): [number, number] {
+  const x = Number(item.gridSize?.[0])
+  const y = Number(item.gridSize?.[1])
+  return [
+    Number.isFinite(x) && x > 0 ? x : 1,
+    Number.isFinite(y) && y > 0 ? y : 1,
+  ]
+}
 
 function ThemeToggleButton() {
   const isDark = useThemeStore((s) => s.mode) === "dark"
@@ -80,7 +95,7 @@ function TourReplayButton() {
               if (isActive) return
               window.dispatchEvent(new CustomEvent("risu-tour-replay"))
             }}
-            className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1 text-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="功能引导"
           />
         }
@@ -101,12 +116,19 @@ interface CatalogPanelProps {
 
 export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   const [category, setCategory] = useState<string>("全部")
+  const [blockCategory, setBlockCategory] = useState<string>("全部")
   const [mobileTab, setMobileTab] = useState<"items" | "block">("items")
   const selectedSku = useEditorStore((s) => s.selectedCatalogSku)
   const selectItem = useEditorStore((s) => s.selectCatalogItem)
+  const placementsCount = useEditorStore((s) => s.placements.length)
   const block = useEditorStore((s) => s.block)
   const setBlock = useEditorStore((s) => s.setBlock)
   const { data, loading, error } = useCatalog()
+  const [confirmBlockChangeOpen, setConfirmBlockChangeOpen] = useState(false)
+  const [pendingBlock, setPendingBlock] = useState<BlockCatalogItem | null>(null)
+  const blockScrollRef = useRef<HTMLDivElement | null>(null)
+  const [canScrollBlockLeft, setCanScrollBlockLeft] = useState(false)
+  const [canScrollBlockRight, setCanScrollBlockRight] = useState(false)
 
   // ── Mobile long-press drag ──
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -126,6 +148,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   const handleTouchStart = useCallback(
     (e: React.TouchEvent, sku: string) => {
       const touch = e.touches[0]
+      if (!touch) return
       longPressOriginRef.current = { x: touch.clientX, y: touch.clientY }
       didDragRef.current = false
 
@@ -145,6 +168,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     (e: React.TouchEvent) => {
       if (!longPressOriginRef.current || !longPressTimerRef.current) return
       const touch = e.touches[0]
+      if (!touch) return
       const dx = touch.clientX - longPressOriginRef.current.x
       const dy = touch.clientY - longPressOriginRef.current.y
       if (dx * dx + dy * dy > 100) {
@@ -157,6 +181,25 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   const handleTouchEnd = useCallback(() => {
     cancelLongPress()
   }, [cancelLongPress])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      if (!useEditorStore.getState().selectedCatalogSku) return
+      useEditorStore.getState().selectCatalogItem(null)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
 
   const handleMobileItemClick = useCallback(
     (sku: string) => {
@@ -183,6 +226,64 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     window.dispatchEvent(new Event("risu:drag-item-end"))
   }
 
+  const handleBlockSelect = useCallback(
+    (nextBlock: BlockCatalogItem) => {
+      if (block.sku === nextBlock.sku) return
+      if (placementsCount === 0) {
+        setBlock(nextBlock)
+        return
+      }
+      setPendingBlock(nextBlock)
+      setConfirmBlockChangeOpen(true)
+    },
+    [block.sku, placementsCount, setBlock],
+  )
+
+  const confirmBlockChange = useCallback(() => {
+    if (!pendingBlock) return
+    setBlock(pendingBlock)
+    setPendingBlock(null)
+    setConfirmBlockChangeOpen(false)
+  }, [pendingBlock, setBlock])
+
+  const blockChangeDialog = (
+    <Dialog.Root
+      open={confirmBlockChangeOpen}
+      onOpenChange={(open) => {
+        setConfirmBlockChangeOpen(open)
+        if (!open) setPendingBlock(null)
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+          <Dialog.Title className="text-sm font-semibold">确认切换框体</Dialog.Title>
+          <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+            你已摆放了一些收纳件。切换框体后，这些收纳件会被移除。确定继续吗？
+          </Dialog.Description>
+          <div className="mt-4 flex justify-end gap-2">
+            <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+              取消
+            </Dialog.Close>
+            <button
+              onClick={confirmBlockChange}
+              className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+            >
+              继续切换
+            </button>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+
+  const updateBlockScrollButtons = useCallback(() => {
+    const el = blockScrollRef.current
+    if (!el) return
+    setCanScrollBlockLeft(el.scrollLeft > 4)
+    setCanScrollBlockRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }, [])
+
   const filteredItems = useMemo(() => {
     if (!data) return []
     return category === "全部"
@@ -194,6 +295,34 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     if (!data) return []
     return groupByCategory(filteredItems, category)
   }, [category, data])
+
+  const blockCategories = useMemo(() => {
+    if (!data) return ["全部"]
+    return ["全部", ...new Set(data.blocks.flatMap((b) => b.categories))]
+  }, [data])
+
+  const filteredBlocks = useMemo(() => {
+    if (!data) return []
+    return blockCategory === "全部"
+      ? data.blocks
+      : data.blocks.filter((b) => b.categories.includes(blockCategory))
+  }, [blockCategory, data])
+
+  useEffect(() => {
+    if (mobile) return
+    updateBlockScrollButtons()
+    const el = blockScrollRef.current
+    if (!el) return
+    const onScroll = () => updateBlockScrollButtons()
+    el.addEventListener("scroll", onScroll, { passive: true })
+    const observer = new ResizeObserver(updateBlockScrollButtons)
+    observer.observe(el)
+    return () => {
+      el.removeEventListener("scroll", onScroll)
+      observer.disconnect()
+    }
+  }, [filteredBlocks, mobile, updateBlockScrollButtons])
+
   const cols = narrow ? 1 : 2
 
   if (loading) {
@@ -283,7 +412,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     )
   }
 
-  const { blocks, categories } = data
+  const { categories } = data
 
   if (mobile) {
     return (
@@ -344,6 +473,9 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
               <div id="tour-m-catalog-items" className="no-scrollbar flex-1 overflow-x-auto overscroll-contain px-4 pb-4 pt-1">
                 <div className="flex h-full gap-2">
                   {filteredItems.map((item) => (
+                    (() => {
+                      const imageSrc = getItemImageSrc(item)
+                      return (
                     <button
                       key={item.sku}
                       onClick={() => handleMobileItemClick(item.sku)}
@@ -359,18 +491,27 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       )}
                     >
                       <div className="mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
-                        <div
-                          className={cn(
-                            "rounded-sm transition-colors",
-                            selectedSku === item.sku
-                              ? "bg-foreground"
-                              : "bg-foreground/20 group-hover:bg-foreground/30",
-                          )}
-                          style={{
-                            width: `${Math.min(item.gridSize[0] * 18, 40)}px`,
-                            height: `${Math.min(item.gridSize[1] * 18, 40)}px`,
-                          }}
-                        />
+                        {imageSrc ? (
+                          <img
+                            src={imageSrc}
+                            alt={item.name}
+                            className="h-full w-full rounded-md object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div
+                            className={cn(
+                              "rounded-sm transition-colors",
+                              selectedSku === item.sku
+                                ? "bg-foreground"
+                                : "bg-foreground/20 group-hover:bg-foreground/30",
+                            )}
+                            style={{
+                              width: `${Math.min(item.gridSize[0] * 18, 40)}px`,
+                              height: `${Math.min(item.gridSize[1] * 18, 40)}px`,
+                            }}
+                          />
+                        )}
                       </div>
                       <div className="text-[11px] font-medium leading-tight">
                         {item.name}
@@ -379,37 +520,72 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         {item.gridSize[0]}×{item.gridSize[1]}
                       </div>
                     </button>
+                      )
+                    })()
                   ))}
                 </div>
               </div>
             </div>
 
             <div className="catalog-scroll no-scrollbar w-1/2 overflow-y-auto overscroll-contain px-4 pb-4">
-              <div className="grid grid-cols-3 gap-2 pt-3">
-                {blocks.map((b) => (
+              <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-3">
+                {blockCategories.map((cat) => (
                   <button
-                    key={b.sku}
-                    onClick={() => setBlock(b)}
+                    key={cat}
+                    onClick={() => setBlockCategory(cat)}
                     className={cn(
-                      "rounded-lg border p-2 text-left transition-colors",
-                      block.sku === b.sku
-                        ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
-                        : "border-border hover:border-foreground/30 hover:bg-muted/50",
+                      "shrink-0 rounded-full px-3.5 py-1.5 text-xs transition-colors",
+                      blockCategory === cat
+                        ? "bg-foreground text-background"
+                        : "bg-muted text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    <div className="text-xs font-medium">{b.name}</div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">
-                      {b.cellGrid[0]}×{b.cellGrid[1]}
-                    </div>
+                    {cat}
                   </button>
                 ))}
               </div>
-              <p className="mt-3 text-[11px] text-muted-foreground">
-                切换框体会清空当前已放置的收纳件。
-              </p>
+              <div className="no-scrollbar overflow-x-auto overscroll-contain px-0.5 py-1">
+                <div className="flex gap-2">
+                  {filteredBlocks.map((b) => (
+                    <button
+                      key={b.sku}
+                      onClick={() => handleBlockSelect(b)}
+                      className={cn(
+                        "group flex shrink-0 w-[110px] flex-col rounded-lg border p-2 text-left transition-all",
+                        block.sku === b.sku
+                          ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
+                          : "border-border hover:border-foreground/30 hover:bg-muted/50",
+                      )}
+                    >
+                      <div className="mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
+                        <div
+                          className={cn(
+                            "rounded-sm transition-colors",
+                            block.sku === b.sku
+                              ? "bg-foreground"
+                              : "bg-foreground/20 group-hover:bg-foreground/30",
+                          )}
+                          style={{
+                            width: `${Math.min(b.cellGrid[0] * 18, 40)}px`,
+                            height: `${Math.min(b.cellGrid[1] * 18, 40)}px`,
+                          }}
+                        />
+                      </div>
+                      <div className="text-[11px] font-medium leading-tight">{b.name}</div>
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
+                        {b.cellGrid[0]}×{b.cellGrid[1]}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {filteredBlocks.length === 0 && (
+                <div className="pt-3 text-[11px] text-muted-foreground">该分类暂无框体</div>
+              )}
             </div>
           </div>
         </div>
+        {blockChangeDialog}
       </div>
     )
   }
@@ -458,23 +634,86 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
           </div>
         </div>
         <div className="mt-4">
-          <div className="mb-2 text-[11px] font-medium text-muted-foreground">框体尺寸</div>
-          <div id="tour-block-picker" className="inline-flex rounded-lg border border-border p-0.5">
-            {blocks.map((b) => (
+          <div className="mb-2 text-[11px] font-medium text-muted-foreground">框体</div>
+          <div className="no-scrollbar mb-2 flex gap-1 overflow-x-auto">
+            {blockCategories.map((cat) => (
               <button
-                key={b.sku}
-                onClick={() => setBlock(b)}
+                key={cat}
+                onClick={() => setBlockCategory(cat)}
                 className={cn(
-                  "rounded-md px-2.5 py-1 text-xs transition-colors",
-                  block.sku === b.sku
+                  "shrink-0 rounded-full px-3 py-1 text-[11px] transition-colors",
+                  blockCategory === cat
                     ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground",
+                    : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
-                {b.cellGrid[0]}×{b.cellGrid[1]}
+                {cat}
               </button>
             ))}
           </div>
+          <div id="tour-block-picker" className="relative">
+            <div
+              ref={blockScrollRef}
+              className="no-scrollbar overflow-x-auto overscroll-contain px-0.5 py-1"
+            >
+            <div className="flex gap-2">
+              {filteredBlocks.map((b) => (
+                <button
+                  key={b.sku}
+                  onClick={() => handleBlockSelect(b)}
+                  className={cn(
+                    "group flex shrink-0 w-[120px] flex-col rounded-lg border p-2.5 text-left transition-all",
+                    block.sku === b.sku
+                      ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
+                      : "border-border hover:border-foreground/30 hover:bg-muted/50",
+                  )}
+                >
+                  <div className="mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
+                    <div
+                      className={cn(
+                        "rounded-sm transition-colors",
+                        block.sku === b.sku
+                          ? "bg-foreground"
+                          : "bg-foreground/20 group-hover:bg-foreground/30",
+                      )}
+                      style={{
+                        width: `${Math.min(b.cellGrid[0] * 10, 52)}px`,
+                        height: `${Math.min(b.cellGrid[1] * 10, 52)}px`,
+                      }}
+                    />
+                  </div>
+                  <div className="line-clamp-1 text-[11px] font-medium leading-tight">{b.name}</div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    {b.cellGrid[0]}×{b.cellGrid[1]} · {b.innerSize[0]}×{b.innerSize[1]}mm
+                  </div>
+                </button>
+              ))}
+            </div>
+            </div>
+            {canScrollBlockLeft && (
+              <button
+                type="button"
+                onClick={() => blockScrollRef.current?.scrollBy({ left: -160, behavior: "smooth" })}
+                className="absolute top-1/2 left-1 z-10 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                aria-label="向左滚动框体"
+              >
+                <span className="text-base leading-none">‹</span>
+              </button>
+            )}
+            {canScrollBlockRight && (
+              <button
+                type="button"
+                onClick={() => blockScrollRef.current?.scrollBy({ left: 160, behavior: "smooth" })}
+                className="absolute top-1/2 right-1 z-10 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/95 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                aria-label="向右滚动框体"
+              >
+                <span className="text-base leading-none">›</span>
+              </button>
+            )}
+          </div>
+          {filteredBlocks.length === 0 && (
+            <div className="mt-2 text-[11px] text-muted-foreground">该分类暂无框体</div>
+          )}
         </div>
 
         <div className="mt-4">
@@ -507,6 +746,10 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
             </div>
             <div className={cn("grid gap-2", cols === 1 ? "grid-cols-1" : "grid-cols-2")}>
               {group.items.map((item) => (
+                (() => {
+                  const imageSrc = getItemImageSrc(item)
+                  const [gridX, gridY] = getSafeGridSize(item)
+                  return (
                 <button
                   key={item.sku}
                   onClick={() => selectItem(item.sku)}
@@ -521,31 +764,43 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   )}
                 >
                   <div className="mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
-                    <div
-                      className={cn(
-                        "rounded-sm transition-colors",
-                        selectedSku === item.sku
-                          ? "bg-foreground"
-                          : "bg-foreground/20 group-hover:bg-foreground/30",
-                      )}
-                      style={{
-                        width: `${Math.min(item.gridSize[0] * 24, 56)}px`,
-                        height: `${Math.min(item.gridSize[1] * 24, 56)}px`,
-                      }}
-                    />
+                    {imageSrc ? (
+                      <img
+                        src={imageSrc}
+                        alt={item.name}
+                        className="h-full w-full rounded-md object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "rounded-sm transition-colors",
+                          selectedSku === item.sku
+                            ? "bg-foreground"
+                            : "bg-foreground/20 group-hover:bg-foreground/30",
+                        )}
+                        style={{
+                          width: `${Math.min(gridX * 24, 56)}px`,
+                          height: `${Math.min(gridY * 24, 56)}px`,
+                        }}
+                      />
+                    )}
                   </div>
                   <div className="text-xs font-medium leading-tight">
                     {item.name}
                   </div>
                   <div className="mt-0.5 text-[10px] text-muted-foreground">
-                    {item.gridSize[0]}×{item.gridSize[1]} · H{item.height}
+                    {gridX}×{gridY} · H{item.height}
                   </div>
                 </button>
+                  )
+                })()
               ))}
             </div>
           </div>
         ))}
       </div>
+      {blockChangeDialog}
     </div>
   )
 }

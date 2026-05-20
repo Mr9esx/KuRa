@@ -5,6 +5,9 @@ export interface CatalogItem {
   categories: string[]
   gridSize: [number, number] // [cols, rows]
   height: number // mm
+  modelPath?: string
+  modelRotation?: [number, number, number] // Euler degrees [x, y, z]
+  imagePath?: string
 }
 
 export interface BlockCatalogItem extends CatalogItem {

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, type DragEvent } from "react"
+import { Suspense, useRef, useEffect, useCallback, useState, type DragEvent } from "react"
 import * as THREE from "three"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
@@ -17,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import { useTour } from "@/components/tour"
-import { TOUR_STORAGE_KEY } from "@/config/tour"
 import {
   NavigationMenu,
   NavigationMenuList,
@@ -26,7 +25,6 @@ import {
   NavigationMenuContent,
 } from "@/components/ui/navigation-menu"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import { PresetDialog } from "@/features/catalog/components/PresetDialog"
 import { BlockMesh } from "./BlockMesh"
 import { CellGrid } from "./CellGrid"
@@ -219,16 +217,20 @@ function Scene({
         onCellHover={setHoveredCell}
         onCellClick={handleCellClick}
       />
-      <PlacedItems
-        block={block}
-        placements={placements}
-        color={itemMat.hex}
-        roughness={itemMat.roughness}
-        selectedPlacementId={selectedPlacementId}
-        onSelectPlacement={selectPlacement}
-        onMovePlacement={movePlacement}
-        onDragPlacementChange={setDraggingPlacementId}
-      />
+      <Suspense fallback={null}>
+        <PlacedItems
+          block={block}
+          placements={placements}
+          color={itemMat.hex}
+          roughness={itemMat.roughness}
+          mobile={mobile}
+          selectedPlacementId={selectedPlacementId}
+          draggingPlacementId={draggingPlacementId}
+          onSelectPlacement={selectPlacement}
+          onMovePlacement={movePlacement}
+          onDragPlacementChange={setDraggingPlacementId}
+        />
+      </Suspense>
 
       <ViewCube />
 
@@ -986,7 +988,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       className="pointer-events-auto flex w-full items-center gap-2 rounded-xl border border-border bg-background/80 px-1 py-1 backdrop-blur-md"
     >
       <div className="flex min-w-0 flex-1 items-center">
-        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-0.5">
+        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {menus}
         </div>
       </div>
@@ -1123,6 +1125,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault()
       const touch = e.touches[0]
+      if (!touch) return
       const cell = resolveDropCell(touch.clientX, touch.clientY)
       setHoveredCell(cell)
     }
