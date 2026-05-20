@@ -688,25 +688,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   }, [])
 
   useEffect(() => {
-    const onStart = (event: Event) => {
-      const custom = event as CustomEvent<{ sku?: string }>
-      if (custom.detail?.sku) setDraggingSku(custom.detail.sku)
-    }
-    const onEnd = () => {
-      setDraggingSku(null)
-      setHoveredCell(null)
-    }
-    window.addEventListener("risu:drag-item-start", onStart as EventListener)
-    window.addEventListener("risu:drag-item-end", onEnd)
-    return () => {
-      window.removeEventListener("risu:drag-item-start", onStart as EventListener)
-      window.removeEventListener("risu:drag-item-end", onEnd)
-    }
-  }, [setHoveredCell])
-
-  // Mobile: track touch across regions during long-press drag
-  useEffect(() => {
-    if (!draggingSku) return
+    let activeSku: string | null = null
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault()
@@ -717,23 +699,50 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
     const onTouchEnd = () => {
       const hoveredCell = useEditorStore.getState().hoveredCell
-      if (hoveredCell && draggingSku) {
-        placeItemBySku(draggingSku, hoveredCell[0], hoveredCell[1])
+      if (hoveredCell && activeSku) {
+        placeItemBySku(activeSku, hoveredCell[0], hoveredCell[1])
       }
+      cleanupTouch()
       setDraggingSku(null)
       setHoveredCell(null)
-      window.dispatchEvent(new Event("risu:drag-item-end"))
     }
 
-    window.addEventListener("touchmove", onTouchMove, { passive: false })
-    window.addEventListener("touchend", onTouchEnd)
-    window.addEventListener("touchcancel", onTouchEnd)
-    return () => {
+    const addTouchListeners = () => {
+      window.addEventListener("touchmove", onTouchMove, { passive: false })
+      window.addEventListener("touchend", onTouchEnd)
+      window.addEventListener("touchcancel", onTouchEnd)
+    }
+
+    const cleanupTouch = () => {
+      activeSku = null
       window.removeEventListener("touchmove", onTouchMove)
       window.removeEventListener("touchend", onTouchEnd)
       window.removeEventListener("touchcancel", onTouchEnd)
     }
-  }, [draggingSku, resolveDropCell, setHoveredCell, placeItemBySku])
+
+    const onStart = (event: Event) => {
+      const custom = event as CustomEvent<{ sku?: string }>
+      if (custom.detail?.sku) {
+        activeSku = custom.detail.sku
+        setDraggingSku(custom.detail.sku)
+        addTouchListeners()
+      }
+    }
+
+    const onEnd = () => {
+      cleanupTouch()
+      setDraggingSku(null)
+      setHoveredCell(null)
+    }
+
+    window.addEventListener("risu:drag-item-start", onStart as EventListener)
+    window.addEventListener("risu:drag-item-end", onEnd)
+    return () => {
+      window.removeEventListener("risu:drag-item-start", onStart as EventListener)
+      window.removeEventListener("risu:drag-item-end", onEnd)
+      cleanupTouch()
+    }
+  }, [resolveDropCell, setHoveredCell, placeItemBySku])
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
