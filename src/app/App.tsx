@@ -22,7 +22,7 @@ function MobileLayout() {
       <div className="relative min-h-0 flex-1">
         <Viewport mobile />
       </div>
-      <div style={{ height: "40dvh" }} className="shrink-0">
+      <div className="shrink-0">
         <CatalogPanel mobile />
       </div>
     </div>
