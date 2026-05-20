@@ -135,6 +135,13 @@
     height: 100dvh;
   }
 
+  .no-transitions,
+  .no-transitions *,
+  .no-transitions *::before,
+  .no-transitions *::after {
+    transition-duration: 0s !important;
+  }
+
   .catalog-scroll {
     scrollbar-width: none;
   }

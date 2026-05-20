@@ -22,7 +22,12 @@ function getEffectiveTheme(mode: ThemeMode): "light" | "dark" {
 
 function applyTheme(mode: ThemeMode) {
   const effective = getEffectiveTheme(mode)
-  document.documentElement.classList.toggle("dark", effective === "dark")
+  const doc = document.documentElement
+  doc.classList.add("no-transitions")
+  doc.classList.toggle("dark", effective === "dark")
+  // force reflow so the class change paints without transitions
+  doc.offsetHeight // eslint-disable-line @typescript-eslint/no-unused-expressions
+  doc.classList.remove("no-transitions")
 }
 
 export const useThemeStore = create<ThemeState>()((set) => ({

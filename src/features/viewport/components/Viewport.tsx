@@ -12,7 +12,10 @@ import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
 import type { Preset } from "@/types/catalog"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useTour } from "@/components/tour"
+import { TOUR_STORAGE_KEY } from "@/config/tour"
 import {
   NavigationMenu,
   NavigationMenuList,
@@ -309,22 +312,28 @@ function PresetSelector({
 
   if (loading) {
     return (
-      <div className="w-max px-3 py-2 text-xs text-muted-foreground" style={{ maxWidth }}>
-        套装加载中…
+      <div className="flex gap-2 px-11 py-2" style={{ width: maxWidth }}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="w-[170px] shrink-0 rounded-lg border border-border p-2">
+            <Skeleton className="mb-1.5 aspect-[4/3] w-full rounded-md" />
+            <Skeleton className="h-3 w-3/4 rounded" />
+            <Skeleton className="mt-1 h-2.5 w-1/2 rounded" />
+          </div>
+        ))}
       </div>
     )
   }
 
   if (error || presets.length === 0) {
     return (
-      <div className="w-max px-3 py-2 text-xs text-muted-foreground" style={{ maxWidth }}>
+      <div className="px-3 py-2 text-xs text-muted-foreground" style={{ width: maxWidth }}>
         暂无可用套装
       </div>
     )
   }
 
   return (
-    <div className="relative inline-block w-max" style={{ maxWidth }}>
+    <div className="relative" style={{ width: maxWidth }}>
       <button
         type="button"
         onClick={() => scrollByCards(-1)}
@@ -336,7 +345,7 @@ function PresetSelector({
 
       <div
         ref={scrollRef}
-        className="no-scrollbar flex w-fit max-w-full overflow-x-auto overflow-y-hidden px-11 py-2"
+        className="no-scrollbar flex w-full overflow-x-auto overflow-y-hidden px-11 py-2"
       >
         <div className="flex w-max gap-2">
           {presets.map((preset) => (
@@ -368,26 +377,42 @@ function PresetSelector({
 }
 
 function MobileTopBar() {
+  const { startTour, setIsTourCompleted, isActive } = useTour()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
       <span className="text-sm font-semibold tracking-tight">RiSu</span>
-      <button
-        onClick={() => {
-          const { mode, setMode } = useThemeStore.getState()
-          setMode(mode === "dark" ? "light" : "dark")
-        }}
-        className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
-        aria-label="切换主题"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-          <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
-          <path d="M12 3l0 18" />
-          <path d="M12 9l4.65 -4.65" />
-          <path d="M12 14.3l7.37 -7.37" />
-          <path d="M12 19.6l8.85 -8.85" />
-        </svg>
-      </button>
+      <div className="flex items-center gap-0.5">
+        <button
+          id="tour-m-replay"
+          onClick={() => {
+            if (isActive) return
+            localStorage.removeItem(TOUR_STORAGE_KEY)
+            setIsTourCompleted(false)
+            setTimeout(() => startTour("main"), 50)
+          }}
+          className="rounded-md p-1 text-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="功能引导"
+        >
+          <CircleHelp className="size-4" />
+        </button>
+        <button
+          onClick={() => {
+            const { mode, setMode } = useThemeStore.getState()
+            setMode(mode === "dark" ? "light" : "dark")
+          }}
+          className="rounded-md p-1 text-foreground transition-colors hover:bg-muted"
+          aria-label="切换主题"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+            <path d="M12 3l0 18" />
+            <path d="M12 9l4.65 -4.65" />
+            <path d="M12 14.3l7.37 -7.37" />
+            <path d="M12 19.6l8.85 -8.85" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }
@@ -411,15 +436,12 @@ export function MobileActionBar() {
   const count = placements.length
 
   useEffect(() => {
-    if (!barRef.current) return
     const update = () => {
-      if (!barRef.current) return
-      setPresetPanelMaxWidth(Math.max(320, barRef.current.clientWidth - 24))
+      setPresetPanelMaxWidth(Math.max(320, window.innerWidth - 32))
     }
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(barRef.current)
-    return () => observer.disconnect()
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
   }, [])
 
   const handleDelete = () => {
@@ -496,10 +518,10 @@ export function MobileActionBar() {
 
   return (
     <div ref={barRef} className="flex items-center gap-0.5">
-      <NavigationMenu className="flex-none" side="top" sideOffset={10}>
+      <NavigationMenu className="flex-none" side="top" sideOffset={16}>
         <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
-            <NavigationMenuTrigger className={iconTrigger} aria-label="材质">
+            <NavigationMenuTrigger id="tour-m-materials" className={iconTrigger} aria-label="材质">
               <Pipette className="size-[18px]" />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
@@ -537,7 +559,7 @@ export function MobileActionBar() {
           </NavigationMenuItem>
 
           <NavigationMenuItem>
-            <NavigationMenuTrigger className={iconTrigger} aria-label="导出">
+            <NavigationMenuTrigger id="tour-m-export" className={iconTrigger} aria-label="导出">
               <Upload className="size-[18px]" />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
@@ -563,9 +585,19 @@ export function MobileActionBar() {
               </div>
             </NavigationMenuContent>
           </NavigationMenuItem>
+        </NavigationMenuList>
+      </NavigationMenu>
 
+      <NavigationMenu
+        className="flex-none"
+        side="top"
+        sideOffset={16}
+        positionerClassName="!left-4 !right-4 !w-auto max-w-none"
+        popupClassName="!w-full"
+      >
+        <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
-            <NavigationMenuTrigger className={iconTrigger} aria-label="套装">
+            <NavigationMenuTrigger id="tour-m-presets" className={iconTrigger} aria-label="套装">
               <Layers className="size-[18px]" />
             </NavigationMenuTrigger>
             <NavigationMenuContent className="p-1">
@@ -677,18 +709,19 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   const count = useEditorStore((s) => s.placements.length)
 
   useEffect(() => {
-    if (!toolbarRef.current) return
+    const viewportEl = toolbarRef.current?.closest<HTMLElement>("[id='tour-viewport']")
+    if (!viewportEl) return
 
     const update = () => {
-      const toolbarEl = toolbarRef.current
-      if (!toolbarEl) return
-      const width = toolbarEl.clientWidth
-      setPresetPanelMaxWidth(Math.max(320, width - 24))
+      const rect = viewportEl.getBoundingClientRect()
+      const left = rect.left + 16
+      setPresetPanelMaxWidth(Math.max(320, viewportEl.clientWidth - 32))
+      document.documentElement.style.setProperty("--preset-panel-left", `${left}px`)
     }
 
     update()
     const observer = new ResizeObserver(update)
-    observer.observe(toolbarRef.current)
+    observer.observe(viewportEl)
     return () => observer.disconnect()
   }, [])
 
@@ -768,7 +801,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       <NavigationMenu className="flex-none" sideOffset={14}>
         <NavigationMenuList className="justify-start">
           <NavigationMenuItem>
-            <NavigationMenuTrigger className="h-8 px-2.5 text-xs">
+            <NavigationMenuTrigger id="tour-materials" className="h-8 px-2.5 text-xs">
               材质
             </NavigationMenuTrigger>
             <NavigationMenuContent>
@@ -806,7 +839,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
           </NavigationMenuItem>
 
           <NavigationMenuItem>
-            <NavigationMenuTrigger className="h-8 px-2.5 text-xs">
+            <NavigationMenuTrigger id="tour-export" className="h-8 px-2.5 text-xs">
               导出
             </NavigationMenuTrigger>
             <NavigationMenuContent>
@@ -832,9 +865,18 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
               </div>
             </NavigationMenuContent>
           </NavigationMenuItem>
+        </NavigationMenuList>
+      </NavigationMenu>
 
+      <NavigationMenu
+        className="flex-none"
+        sideOffset={14}
+        positionerClassName="!left-(--preset-panel-left) !right-4 !w-auto max-w-none"
+        popupClassName="!w-full"
+      >
+        <NavigationMenuList className="justify-start">
           <NavigationMenuItem>
-            <NavigationMenuTrigger className="h-8 px-2.5 text-xs">
+            <NavigationMenuTrigger id="tour-presets" className="h-8 px-2.5 text-xs">
               套装
             </NavigationMenuTrigger>
             <NavigationMenuContent className="p-1">
@@ -1077,6 +1119,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
   return (
     <div
+      id="tour-viewport"
       className="relative h-full w-full bg-[#faf9f7] dark:bg-[#1a1a1a]"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
