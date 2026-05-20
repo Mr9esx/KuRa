@@ -27,8 +27,8 @@ function TourDialog() {
       setIsTourCompleted(false)
       setDialogOpen(true)
     }
-    window.addEventListener("risu-tour-replay", handleReplay)
-    return () => window.removeEventListener("risu-tour-replay", handleReplay)
+    window.addEventListener("kura-tour-replay", handleReplay)
+    return () => window.removeEventListener("kura-tour-replay", handleReplay)
   }, [setIsTourCompleted])
 
   const handleDialogChange = (open: boolean) => {

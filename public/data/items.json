@@ -1,33 +1,42 @@
 [
   {
     "sku": "11001",
-    "name": "小物收纳格",
+    "name": "B-2x1-H20-八小格",
     "type": "item",
-    "categories": ["基础收纳", "电子设备收纳", "化妆品收纳", "工具收纳"],
-    "gridSize": [1, 1],
-    "height": 20
+    "categories": ["基础收纳"],
+    "gridSize": [2, 1],
+    "height": 20,
+    "imagePath": "images/items/B-2x1-H20-八小格.png",
+    "modelPath": "models/items/B-2x1-H20-八小格.3mf",
+    "modelRotation": [90, 180, 0]
   },
   {
     "sku": "11002",
-    "name": "通用收纳格",
+    "name": "B-2x1-H40-八小格",
     "type": "item",
-    "categories": ["基础收纳", "电子设备收纳", "化妆品收纳", "工具收纳"],
+    "categories": ["基础收纳"],
     "gridSize": [2, 1],
-    "height": 20
+    "height": 40,
+    "imagePath": "images/items/B-2x1-H40-八小格.png",
+    "modelPath": "models/items/B-2x1-H40-八小格.3mf",
+    "modelRotation": [90, 180, 0]
   },
   {
     "sku": "11003",
-    "name": "中容量收纳格",
+    "name": "B-2x1-H80-八小格",
     "type": "item",
-    "categories": ["基础收纳", "电子设备收纳", "镜头收纳", "化妆品收纳", "工具收纳"],
-    "gridSize": [2, 2],
-    "height": 20
+    "categories": ["基础收纳"],
+    "gridSize": [2, 1],
+    "height": 80,
+    "imagePath": "images/items/B-2x1-H80-八小格.png",
+    "modelPath": "models/items/B-2x1-H80-八小格.3mf",
+    "modelRotation": [90, 180, 0]
   },
   {
     "sku": "11004",
     "name": "长条收纳格",
     "type": "item",
-    "categories": ["基础收纳", "工具收纳"],
+    "categories": ["工具收纳"],
     "gridSize": [3, 1],
     "height": 20
   },
@@ -35,7 +44,7 @@
     "sku": "12001",
     "name": "单孔笔筒",
     "type": "item",
-    "categories": ["基础收纳", "化妆品收纳", "工具收纳"],
+    "categories": ["化妆品收纳", "工具收纳"],
     "gridSize": [1, 1],
     "height": 80
   },
@@ -43,7 +52,7 @@
     "sku": "12002",
     "name": "多孔笔筒",
     "type": "item",
-    "categories": ["基础收纳", "化妆品收纳", "工具收纳"],
+    "categories": ["化妆品收纳", "工具收纳"],
     "gridSize": [2, 1],
     "height": 80
   },

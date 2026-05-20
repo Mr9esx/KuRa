@@ -197,4 +197,4 @@ export function getTourSteps(mobile: boolean) {
   return mobile ? mobileSteps : desktopSteps
 }
 
-export const TOUR_STORAGE_KEY = "risu-tour-completed"
+export const TOUR_STORAGE_KEY = "kura-tour-completed"
