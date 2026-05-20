@@ -377,23 +377,31 @@ function PresetSelector({
 }
 
 function useFullscreen() {
-  const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement)
+  const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void }
+  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }
+
+  const getIsFullscreen = () => !!(document.fullscreenElement ?? doc.webkitFullscreenElement)
+  const [isFullscreen, setIsFullscreen] = useState(getIsFullscreen)
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement)
+    const onChange = () => setIsFullscreen(getIsFullscreen())
     document.addEventListener("fullscreenchange", onChange)
-    return () => document.removeEventListener("fullscreenchange", onChange)
-  }, [])
-
-  const toggle = useCallback(() => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen()
-    } else {
-      document.documentElement.requestFullscreen().catch(() => {})
+    document.addEventListener("webkitfullscreenchange", onChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange)
+      document.removeEventListener("webkitfullscreenchange", onChange)
     }
   }, [])
 
-  const supported = typeof document.documentElement.requestFullscreen === "function"
+  const toggle = useCallback(() => {
+    if (getIsFullscreen()) {
+      (document.exitFullscreen ?? doc.webkitExitFullscreen)?.call(document)
+    } else {
+      (el.requestFullscreen ?? el.webkitRequestFullscreen)?.call(el).catch(() => {})
+    }
+  }, [])
+
+  const supported = typeof el.requestFullscreen === "function" || typeof el.webkitRequestFullscreen === "function"
 
   return { isFullscreen, toggle, supported }
 }
