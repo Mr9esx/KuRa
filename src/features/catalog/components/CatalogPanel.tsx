@@ -444,7 +444,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
           <MobileActionBar />
         </div>
 
-        <div className="relative h-[220px] overflow-hidden">
+        <div className="relative h-[238px] overflow-hidden">
           <div
             className={cn(
               "absolute inset-0 flex w-[200%] transition-transform duration-300 ease-out",
@@ -484,7 +484,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       onTouchEnd={handleTouchEnd}
                       onTouchCancel={handleTouchEnd}
                       className={cn(
-                        "group flex h-full shrink-0 w-[110px] flex-col rounded-lg border p-2 text-left transition-all",
+                        "group flex h-full min-h-[172px] shrink-0 w-[110px] flex-col rounded-lg border p-2 text-left transition-all",
                         selectedSku === item.sku
                           ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
                           : "border-border hover:border-foreground/30 hover:bg-muted/50",
@@ -517,7 +517,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         {getCatalogItemDisplayName(item)}
                       </div>
                       {item.desc ? (
-                        <div className="mt-0.5 min-h-[24px] text-[10px] leading-tight text-muted-foreground/90">
+                        <div className="mt-0.5 min-h-[42px] line-clamp-3 text-[10px] leading-[1.35] text-muted-foreground/90">
                           {item.desc}
                         </div>
                       ) : null}
