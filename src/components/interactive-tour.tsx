@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { useEditorStore } from "@/stores/editor-store"
 import { useLayoutMode } from "@/hooks/use-layout-mode"
 import { useCatalog } from "@/hooks/use-catalog"
-import { KuRaLogo } from "@/components/brand/kura-logo"
+import { AppLogo } from "@/components/brand/app-logo"
+import { STORAGE_KEYS, CUSTOM_EVENTS, APP_NAME } from "@/config/brand"
 
-const STORAGE_KEY = "kura-tour-completed"
+const STORAGE_KEY = STORAGE_KEYS.tourCompleted
 
 interface TourStep {
   id: string
@@ -294,8 +296,26 @@ function WelcomeDialog({
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="mx-4 w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl">
         <div className="flex flex-col items-center text-center">
-          <KuRaLogo className="size-12" />
-          <h2 className="mt-3 text-lg font-semibold">欢迎使用 KuRa</h2>
+          <motion.div
+            initial={{ scale: 0.7, filter: "blur(10px)" }}
+            animate={{
+              scale: 1,
+              filter: "blur(0px)",
+              y: [0, -6, 0],
+            }}
+            transition={{
+              duration: 0.4,
+              ease: "easeOut",
+              y: {
+                duration: 2.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+            }}
+          >
+            <AppLogo className="size-12" />
+          </motion.div>
+          <h2 className="mt-3 text-lg font-semibold">欢迎使用 {APP_NAME}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             跟着引导一起操作，3 步快速上手收纳布局。
           </p>
@@ -354,8 +374,8 @@ export function InteractiveTour() {
       setStepIndex(0)
       setPhase("welcome")
     }
-    window.addEventListener("kura-tour-replay", handleReplay)
-    return () => window.removeEventListener("kura-tour-replay", handleReplay)
+    window.addEventListener(CUSTOM_EVENTS.tourReplay, handleReplay)
+    return () => window.removeEventListener(CUSTOM_EVENTS.tourReplay, handleReplay)
   }, [])
 
   const complete = useCallback(() => {

@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { STORAGE_KEYS } from "@/config/brand"
 
 type ThemeMode = "light" | "dark" | "system"
 
@@ -7,7 +8,7 @@ interface ThemeState {
   setMode: (mode: ThemeMode) => void
 }
 
-const STORAGE_KEY = "kura-theme"
+const STORAGE_KEY = STORAGE_KEYS.theme
 
 function getInitialMode(): ThemeMode {
   const stored = localStorage.getItem(STORAGE_KEY)

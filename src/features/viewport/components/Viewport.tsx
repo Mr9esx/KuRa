@@ -11,6 +11,8 @@ import { getMaterialColor, MATERIAL_COLORS } from "@/config/materials"
 import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
+import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
+import { AppLogo } from "@/components/brand/app-logo"
 import type { Preset } from "@/types/catalog"
 import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp, Maximize, Minimize } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -239,7 +241,7 @@ function Scene({
         />
       </Suspense>
 
-      <ViewCube />
+      <ViewCube mobile={mobile} />
 
       {hoveredCell && selectedItem && (
         <GhostPreview
@@ -425,7 +427,10 @@ function MobileTopBar() {
   const { isFullscreen, toggle: toggleFullscreen, supported: fullscreenSupported } = useFullscreen()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
-      <span className="text-sm font-semibold tracking-tight">KuRa</span>
+      <div className="flex items-center gap-1">
+        <AppLogo className="size-4" />
+        <span className="text-sm font-semibold tracking-tight">{APP_NAME}</span>
+      </div>
       <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger
@@ -433,7 +438,7 @@ function MobileTopBar() {
               <button
                 id="tour-m-replay"
                 onClick={() => {
-                  window.dispatchEvent(new CustomEvent("kura-tour-replay"))
+                  window.dispatchEvent(new CustomEvent(CUSTOM_EVENTS.tourReplay))
                 }}
                 className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
                 aria-label="功能引导"
@@ -502,8 +507,8 @@ function MobileTopBar() {
               <div className="flex items-center gap-2">
                 <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
                 <div>
-                  <p className="text-sm font-semibold">KuRa 小红书</p>
-                  <p className="text-xs text-muted-foreground">@KuRa官方账号</p>
+                  <p className="text-sm font-semibold">{APP_SOCIAL.xiaohongshu.label}</p>
+                  <p className="text-xs text-muted-foreground">{APP_SOCIAL.xiaohongshu.account}</p>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -562,7 +567,7 @@ export function MobileActionBar() {
       placements,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `kura-model-mock-${Date.now()}.json`)
+    saveAs(blob, `${EXPORT_PREFIX}-model-mock-${Date.now()}.json`)
   }
 
   const exportShoppingList = () => {
@@ -582,7 +587,7 @@ export function MobileActionBar() {
       items: list,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `kura-shopping-list-${Date.now()}.json`)
+    saveAs(blob, `${EXPORT_PREFIX}-shopping-list-${Date.now()}.json`)
   }
 
   const exportAllMock = async () => {
@@ -610,7 +615,7 @@ export function MobileActionBar() {
     zip.file("model.mock.json", JSON.stringify(model, null, 2))
     zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
     const blob = await zip.generateAsync({ type: "blob" })
-    saveAs(blob, `kura-export-${Date.now()}.zip`)
+    saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
   }
 
   const iconTrigger =
@@ -742,11 +747,11 @@ export function MobileActionBar() {
           <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
               确认删除选中的收纳件吗？
             </Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
                 取消
               </Dialog.Close>
               <button
@@ -754,7 +759,7 @@ export function MobileActionBar() {
                   if (selectedPlacementId) removePlacement(selectedPlacementId)
                   setConfirmDeleteOpen(false)
                 }}
-                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
               >
                 确认删除
               </button>
@@ -768,11 +773,11 @@ export function MobileActionBar() {
           <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
               确认清空当前布局吗？此操作不可撤销。
             </Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
                 取消
               </Dialog.Close>
               <button
@@ -780,7 +785,7 @@ export function MobileActionBar() {
                   clearAll()
                   setConfirmClearOpen(false)
                 }}
-                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
               >
                 确认清空
               </button>
@@ -845,7 +850,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       placements,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `kura-model-mock-${Date.now()}.json`)
+    saveAs(blob, `${EXPORT_PREFIX}-model-mock-${Date.now()}.json`)
   }
 
   const exportShoppingList = () => {
@@ -865,7 +870,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       items: list,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `kura-shopping-list-${Date.now()}.json`)
+    saveAs(blob, `${EXPORT_PREFIX}-shopping-list-${Date.now()}.json`)
   }
 
   const exportAllMock = async () => {
@@ -893,7 +898,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     zip.file("model.mock.json", JSON.stringify(model, null, 2))
     zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
     const blob = await zip.generateAsync({ type: "blob" })
-    saveAs(blob, `kura-export-${Date.now()}.zip`)
+    saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
   }
 
   if (mobile) return <MobileTopBar />
@@ -1044,11 +1049,11 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
           <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
               确认删除选中的收纳件吗？
             </Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
                 取消
               </Dialog.Close>
               <button
@@ -1056,7 +1061,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
                   if (selectedPlacementId) removePlacement(selectedPlacementId)
                   setConfirmDeleteOpen(false)
                 }}
-                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
               >
                 确认删除
               </button>
@@ -1070,11 +1075,11 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
           <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
               确认清空当前布局吗？此操作不可撤销。
             </Dialog.Description>
             <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
                 取消
               </Dialog.Close>
               <button
@@ -1082,7 +1087,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
                   clearAll()
                   setConfirmClearOpen(false)
                 }}
-                className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
               >
                 确认清空
               </button>
@@ -1187,11 +1192,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       setHoveredCell(null)
     }
 
-    window.addEventListener("kura:drag-item-start", onStart as EventListener)
-    window.addEventListener("kura:drag-item-end", onEnd)
+    window.addEventListener(CUSTOM_EVENTS.dragItemStart, onStart as EventListener)
+    window.addEventListener(CUSTOM_EVENTS.dragItemEnd, onEnd)
     return () => {
-      window.removeEventListener("kura:drag-item-start", onStart as EventListener)
-      window.removeEventListener("kura:drag-item-end", onEnd)
+      window.removeEventListener(CUSTOM_EVENTS.dragItemStart, onStart as EventListener)
+      window.removeEventListener(CUSTOM_EVENTS.dragItemEnd, onEnd)
       cleanupTouch()
     }
   }, [resolveDropCell, setHoveredCell, placeItemBySku])
@@ -1206,7 +1211,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     const sku = draggingSku ||
-      e.dataTransfer.getData("application/x-kura-sku") ||
+      e.dataTransfer.getData(DATA_TRANSFER_TYPE) ||
       e.dataTransfer.getData("text/plain")
     if (!sku) {
       setHoveredCell(null)

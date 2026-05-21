@@ -9,10 +9,14 @@ export const cameraTweenRef: {
 } = { current: null }
 
 const H = 0.5
-const SCALE = 40
+const SCALE_MOBILE = 38
+const SCALE_DESKTOP = 48
 const MARGIN = 0.17
 const FACE_SIZE = 1 - 2 * MARGIN
 const HIGHLIGHT = "#4da6ff"
+
+const MARGIN_MOBILE: [number, number] = [36, 36]
+const MARGIN_DESKTOP: [number, number] = [48, 48]
 
 const LABELS = ["右", "左", "上", "下", "前", "后"]
 
@@ -160,7 +164,7 @@ function CubeBody() {
 
 // ── Inner content (must be inside GizmoHelper for rotation sync) ──
 
-function ViewCubeInner() {
+function ViewCubeInner({ mobile }: { mobile?: boolean }) {
   const hitRef = useRef<THREE.Mesh>(null)
   const rootRef = useRef<THREE.Group>(null)
   const [hover, setHover] = useState<ZoneInfo | null>(null)
@@ -214,7 +218,7 @@ function ViewCubeInner() {
   const overlays = hover ? computeOverlays(hover) : []
 
   return (
-    <group ref={rootRef} scale={SCALE}>
+    <group ref={rootRef} scale={mobile ? SCALE_MOBILE : SCALE_DESKTOP}>
       <CubeBody />
 
       <lineSegments geometry={edgesGeo}>
@@ -253,10 +257,10 @@ function ViewCubeInner() {
 
 // ── Exported component ──
 
-export function ViewCube() {
+export function ViewCube({ mobile }: { mobile?: boolean }) {
   return (
-    <GizmoHelper alignment="bottom-right" margin={[42, 42]}>
-      <ViewCubeInner />
+    <GizmoHelper alignment="bottom-right" margin={mobile ? MARGIN_MOBILE : MARGIN_DESKTOP}>
+      <ViewCubeInner mobile={mobile} />
     </GizmoHelper>
   )
 }

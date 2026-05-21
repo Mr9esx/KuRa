@@ -3,6 +3,7 @@ import * as THREE from "three"
 import JSZip from "jszip"
 import { saveAs } from "file-saver"
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
+import { METADATA_PREFIX } from "@/config/brand"
 
 interface ModelEntry {
   id: string
@@ -329,20 +330,20 @@ export default function ItemCardTool() {
     [rotX, rotY, rotZ, povX, povY, povZ, fillRatio, compositionOffsetX],
   )
   const buildExportMetadata = useCallback((entry: ModelEntry) => ({
-    "kura.modelPath": typeof entry.source === "string" ? normalizePath(entry.source) : entry.source.name,
-    "kura.displayName": entry.displayName,
-    "kura.exportSize": `${Math.max(64, Math.floor(exportWidth))}x${Math.max(64, Math.floor(exportHeight))}`,
-    "kura.rotationDeg": `${num2(rotX)},${num2(rotY)},${num2(rotZ)}`,
-    "kura.modelBaseRotationDeg": `${BASE_MODEL_ROTATION_DEG[0]},${BASE_MODEL_ROTATION_DEG[1]},${BASE_MODEL_ROTATION_DEG[2]}`,
-    "kura.modelAppliedRotationDeg": `${num2(BASE_MODEL_ROTATION_DEG[0] + rotX)},${num2(BASE_MODEL_ROTATION_DEG[1] + rotY)},${num2(BASE_MODEL_ROTATION_DEG[2] + rotZ)}`,
-    "kura.povRotationDeg": `${num2(povX)},${num2(povY)},${num2(povZ)}`,
-    "kura.povBaseOffsetDeg": `${BASE_POV_OFFSET_DEG[0]},${BASE_POV_OFFSET_DEG[1]},${BASE_POV_OFFSET_DEG[2]}`,
-    "kura.povAppliedDeg": `${num2(BASE_POV_OFFSET_DEG[0] + povX)},${num2(BASE_POV_OFFSET_DEG[1] + povY)},${num2(BASE_POV_OFFSET_DEG[2] + povZ)}`,
-    "kura.compositionOffsetX": String(num2(compositionOffsetX)),
-    "kura.compositionBaseOffsetX": String(BASE_COMPOSITION_OFFSET_X),
-    "kura.compositionAppliedOffsetX": String(num2(BASE_COMPOSITION_OFFSET_X + compositionOffsetX)),
-    "kura.fillRatio": String(num2(fillRatio)),
-    "kura.exportedAt": new Date().toISOString(),
+    [`${METADATA_PREFIX}.modelPath`]: typeof entry.source === "string" ? normalizePath(entry.source) : entry.source.name,
+    [`${METADATA_PREFIX}.displayName`]: entry.displayName,
+    [`${METADATA_PREFIX}.exportSize`]: `${Math.max(64, Math.floor(exportWidth))}x${Math.max(64, Math.floor(exportHeight))}`,
+    [`${METADATA_PREFIX}.rotationDeg`]: `${num2(rotX)},${num2(rotY)},${num2(rotZ)}`,
+    [`${METADATA_PREFIX}.modelBaseRotationDeg`]: `${BASE_MODEL_ROTATION_DEG[0]},${BASE_MODEL_ROTATION_DEG[1]},${BASE_MODEL_ROTATION_DEG[2]}`,
+    [`${METADATA_PREFIX}.modelAppliedRotationDeg`]: `${num2(BASE_MODEL_ROTATION_DEG[0] + rotX)},${num2(BASE_MODEL_ROTATION_DEG[1] + rotY)},${num2(BASE_MODEL_ROTATION_DEG[2] + rotZ)}`,
+    [`${METADATA_PREFIX}.povRotationDeg`]: `${num2(povX)},${num2(povY)},${num2(povZ)}`,
+    [`${METADATA_PREFIX}.povBaseOffsetDeg`]: `${BASE_POV_OFFSET_DEG[0]},${BASE_POV_OFFSET_DEG[1]},${BASE_POV_OFFSET_DEG[2]}`,
+    [`${METADATA_PREFIX}.povAppliedDeg`]: `${num2(BASE_POV_OFFSET_DEG[0] + povX)},${num2(BASE_POV_OFFSET_DEG[1] + povY)},${num2(BASE_POV_OFFSET_DEG[2] + povZ)}`,
+    [`${METADATA_PREFIX}.compositionOffsetX`]: String(num2(compositionOffsetX)),
+    [`${METADATA_PREFIX}.compositionBaseOffsetX`]: String(BASE_COMPOSITION_OFFSET_X),
+    [`${METADATA_PREFIX}.compositionAppliedOffsetX`]: String(num2(BASE_COMPOSITION_OFFSET_X + compositionOffsetX)),
+    [`${METADATA_PREFIX}.fillRatio`]: String(num2(fillRatio)),
+    [`${METADATA_PREFIX}.exportedAt`]: new Date().toISOString(),
   }), [compositionOffsetX, exportHeight, exportWidth, fillRatio, povX, povY, povZ, rotX, rotY, rotZ])
 
   useEffect(() => {

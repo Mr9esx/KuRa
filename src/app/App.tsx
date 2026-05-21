@@ -11,7 +11,9 @@ function DesktopLayout({ narrow }: { narrow?: boolean }) {
   return (
     <div className="flex flex-1 overflow-hidden">
       <CatalogPanel narrow={narrow} />
-      <Viewport />
+      <div className="min-w-0 flex-1">
+        <Viewport />
+      </div>
     </div>
   )
 }

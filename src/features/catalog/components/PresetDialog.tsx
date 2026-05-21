@@ -37,8 +37,8 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[380px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background shadow-xl">
-          <div className="relative">
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+          <div className="relative shrink-0">
             <div className="aspect-[16/10] w-full bg-muted">
               <img
                 src={preset.image}
@@ -58,7 +58,7 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
             </Dialog.Close>
           </div>
 
-          <div className="p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <Dialog.Title className="text-base font-semibold">{preset.name}</Dialog.Title>
             <Dialog.Description className="mt-1 text-xs text-muted-foreground">
               {preset.description}
@@ -93,70 +93,70 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
                 </div>
               </div>
 
-              <div className="no-scrollbar max-h-[220px] overflow-y-auto">
-                {viewMode === "grid" ? (
-                  <div className="grid grid-cols-3 gap-2">
-                    {itemList.map(({ sku, count, name, gridSize }) => (
-                      <div key={sku} className="flex flex-col rounded-lg border border-border p-2">
-                        <div className="mb-1.5 flex aspect-square items-center justify-center rounded-md bg-muted/60">
-                          <div
-                            className="rounded-sm bg-foreground/20"
-                            style={{
-                              width: `${Math.min((gridSize?.[0] ?? 1) * 16, 40)}px`,
-                              height: `${Math.min((gridSize?.[1] ?? 1) * 16, 40)}px`,
-                            }}
-                          />
-                        </div>
-                        <div className="text-xs font-semibold leading-tight">{name}</div>
-                        <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
-                          <span>
-                            {gridSize?.[0]}×{gridSize?.[1]}
-                          </span>
-                          <span>×{count}</span>
-                        </div>
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {itemList.map(({ sku, count, name, gridSize }) => (
+                    <div key={sku} className="flex flex-col rounded-lg border border-border p-2">
+                      <div className="mb-1.5 flex aspect-square items-center justify-center rounded-md bg-muted/60">
+                        <div
+                          className="rounded-sm bg-foreground/20"
+                          style={{
+                            width: `${Math.min((gridSize?.[0] ?? 1) * 16, 40)}px`,
+                            height: `${Math.min((gridSize?.[1] ?? 1) * 16, 40)}px`,
+                          }}
+                        />
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-border">
-                    <div className="flex items-center border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                      <div className="w-8 shrink-0" />
-                      <div className="flex-1 pl-3">名称</div>
-                      <div className="w-10 text-center">尺寸</div>
-                      <div className="w-8 text-right">数量</div>
-                    </div>
-                    {itemList.map(({ sku, count, name, gridSize }, i) => (
-                      <div
-                        key={sku}
-                        className={cn(
-                          "flex items-center px-3 py-2",
-                          i < itemList.length - 1 && "border-b border-border",
-                        )}
-                      >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                          <div
-                            className="rounded-sm bg-foreground/20"
-                            style={{
-                              width: `${Math.min((gridSize?.[0] ?? 1) * 10, 24)}px`,
-                              height: `${Math.min((gridSize?.[1] ?? 1) * 10, 24)}px`,
-                            }}
-                          />
-                        </div>
-                        <div className="flex-1 pl-3 text-xs font-semibold">{name}</div>
-                        <div className="w-10 text-center text-xs text-muted-foreground">
+                      <div className="text-xs font-semibold leading-tight">{name}</div>
+                      <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>
                           {gridSize?.[0]}×{gridSize?.[1]}
-                        </div>
-                        <div className="w-8 text-right text-xs text-muted-foreground">
-                          ×{count}
-                        </div>
+                        </span>
+                        <span>×{count}</span>
                       </div>
-                    ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border">
+                  <div className="flex items-center border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                    <div className="w-8 shrink-0" />
+                    <div className="flex-1 pl-3">名称</div>
+                    <div className="w-10 text-center">尺寸</div>
+                    <div className="w-8 text-right">数量</div>
                   </div>
-                )}
-              </div>
+                  {itemList.map(({ sku, count, name, gridSize }, i) => (
+                    <div
+                      key={sku}
+                      className={cn(
+                        "flex items-center px-3 py-2",
+                        i < itemList.length - 1 && "border-b border-border",
+                      )}
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                        <div
+                          className="rounded-sm bg-foreground/20"
+                          style={{
+                            width: `${Math.min((gridSize?.[0] ?? 1) * 10, 24)}px`,
+                            height: `${Math.min((gridSize?.[1] ?? 1) * 10, 24)}px`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 pl-3 text-xs font-semibold">{name}</div>
+                      <div className="w-10 text-center text-xs text-muted-foreground">
+                        {gridSize?.[0]}×{gridSize?.[1]}
+                      </div>
+                      <div className="w-8 text-right text-xs text-muted-foreground">
+                        ×{count}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          </div>
 
-            <div className="mt-4 flex gap-2">
+          <div className="shrink-0 border-t border-border p-4">
+            <div className="flex gap-2">
               <button
                 onClick={handleApply}
                 className="flex-1 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"

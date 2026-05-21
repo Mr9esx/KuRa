@@ -10,6 +10,8 @@ import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
 import type { BlockCatalogItem, CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
+import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
+import { AppLogo } from "@/components/brand/app-logo"
 
 function groupByCategory(items: CatalogItem[], activeCategory: string) {
   const groups: { category: string; items: CatalogItem[] }[] = []
@@ -90,7 +92,7 @@ function TourReplayButton() {
           <button
             id="tour-replay"
             onClick={() => {
-              window.dispatchEvent(new CustomEvent("kura-tour-replay"))
+              window.dispatchEvent(new CustomEvent(CUSTOM_EVENTS.tourReplay))
             }}
             className="rounded-md p-1 text-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="功能引导"
@@ -154,7 +156,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
         longPressTimerRef.current = null
         selectItem(null)
         window.dispatchEvent(
-          new CustomEvent("kura:drag-item-start", { detail: { sku } }),
+          new CustomEvent(CUSTOM_EVENTS.dragItemStart, { detail: { sku } }),
         )
       }, 300)
     },
@@ -211,16 +213,16 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
   const handleDragStart = (e: DragEvent<HTMLButtonElement>, sku: string) => {
     e.dataTransfer.effectAllowed = "copy"
-    e.dataTransfer.setData("application/x-kura-sku", sku)
+    e.dataTransfer.setData(DATA_TRANSFER_TYPE, sku)
     e.dataTransfer.setData("text/plain", sku)
     e.dataTransfer.setDragImage(emptyDragImage, 0, 0)
     window.dispatchEvent(
-      new CustomEvent("kura:drag-item-start", { detail: { sku } }),
+      new CustomEvent(CUSTOM_EVENTS.dragItemStart, { detail: { sku } }),
     )
   }
 
   const handleDragEnd = () => {
-    window.dispatchEvent(new Event("kura:drag-item-end"))
+    window.dispatchEvent(new Event(CUSTOM_EVENTS.dragItemEnd))
   }
 
   const handleBlockSelect = useCallback(
@@ -255,16 +257,16 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
         <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
           <Dialog.Title className="text-sm font-semibold">确认切换框体</Dialog.Title>
-          <Dialog.Description className="mt-2 text-xs text-muted-foreground">
+          <Dialog.Description className="mt-2 text-sm text-muted-foreground">
             你已摆放了一些收纳件。切换框体后，这些收纳件会被移除。确定继续吗？
           </Dialog.Description>
           <div className="mt-4 flex justify-end gap-2">
-            <Dialog.Close className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-muted">
+            <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
               取消
             </Dialog.Close>
             <button
               onClick={confirmBlockChange}
-              className="rounded-md bg-destructive px-3 py-1.5 text-xs text-white transition-opacity hover:opacity-90"
+              className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
             >
               继续切换
             </button>
@@ -596,7 +598,10 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold tracking-tight">KuRa</span>
+          <div className="flex items-center gap-1">
+            <AppLogo className="size-5" />
+            <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
+          </div>
           <div className="flex items-center gap-0.5">
             <TourReplayButton />
             <ThemeToggleButton />
@@ -619,8 +624,8 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   <div className="flex items-center gap-2">
                     <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
                     <div>
-                      <p className="text-sm font-semibold">KuRa 小红书</p>
-                      <p className="text-xs text-muted-foreground">@KuRa官方账号</p>
+                      <p className="text-sm font-semibold">{APP_SOCIAL.xiaohongshu.label}</p>
+                      <p className="text-xs text-muted-foreground">{APP_SOCIAL.xiaohongshu.account}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
