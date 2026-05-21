@@ -3,6 +3,10 @@ import * as THREE from "three"
 import JSZip from "jszip"
 import { saveAs } from "file-saver"
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js"
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js"
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js"
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js"
 import { METADATA_PREFIX } from "@/config/brand"
 
 interface ModelEntry {
@@ -26,6 +30,7 @@ function makeDefaultEntries(): ModelEntry[] {
 const BASE_MODEL_ROTATION_DEG: [number, number, number] = [-90, 0, 0]
 const BASE_POV_OFFSET_DEG: [number, number, number] = [-10, 0, 0]
 const BASE_COMPOSITION_OFFSET_X = -0.06
+const BASE_COMPOSITION_OFFSET_Y = 0
 
 function normalizePath(path: string) {
   return path.trim().replace(/^\//, "")
@@ -44,7 +49,7 @@ function sourceLabel(entry: ModelEntry) {
 function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff
   for (let i = 0; i < bytes.length; i++) {
-    crc ^= bytes[i]
+    crc ^= bytes[i] ?? 0
     for (let j = 0; j < 8; j++) {
       const mask = -(crc & 1)
       crc = (crc >>> 1) ^ (0xedb88320 & mask)
@@ -93,10 +98,10 @@ async function embedPngTextMetadata(blob: Blob, records: Record<string, string>)
 
   const firstChunkOffset = 8
   if (firstChunkOffset + 8 > bytes.length) return blob
-  const ihdrLen = (bytes[firstChunkOffset] << 24) |
-    (bytes[firstChunkOffset + 1] << 16) |
-    (bytes[firstChunkOffset + 2] << 8) |
-    bytes[firstChunkOffset + 3]
+  const ihdrLen = ((bytes[firstChunkOffset] ?? 0) << 24) |
+    ((bytes[firstChunkOffset + 1] ?? 0) << 16) |
+    ((bytes[firstChunkOffset + 2] ?? 0) << 8) |
+    (bytes[firstChunkOffset + 3] ?? 0)
   const ihdrTotal = 12 + ihdrLen
   const insertPos = firstChunkOffset + ihdrTotal
   if (insertPos > bytes.length) return blob
@@ -126,11 +131,69 @@ interface SceneContext {
   dispose: () => void
 }
 
-interface RenderOptions {
+interface ModelRenderOptions {
   modelRotationDeg: [number, number, number]
-  povRotationDeg: [number, number, number]
   fillRatio: number
+  colorHex: string
+  edgeEnabled: boolean
+  edgeColorHex: string
+  edgeWidthPx: number
+}
+
+interface CameraRenderOptions {
+  povRotationDeg: [number, number, number]
   compositionOffsetX: number
+  compositionOffsetY: number
+}
+
+function disposeObjectResources(root: THREE.Object3D) {
+  root.traverse((obj) => {
+    const disposable = obj as THREE.Object3D & {
+      geometry?: { dispose?: () => void }
+      material?: THREE.Material | THREE.Material[]
+    }
+    disposable.geometry?.dispose?.()
+    if (Array.isArray(disposable.material)) {
+      disposable.material.forEach((m) => m.dispose())
+    } else {
+      disposable.material?.dispose()
+    }
+  })
+}
+
+function updateEdgeLineResolution(root: THREE.Object3D, renderer: THREE.WebGLRenderer) {
+  const size = new THREE.Vector2()
+  renderer.getSize(size)
+  if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.x <= 0 || size.y <= 0) {
+    return
+  }
+  root.traverse((obj) => {
+    const material = (obj as THREE.Object3D & { material?: unknown }).material
+    if (!material) return
+    if (material instanceof LineMaterial) {
+      material.resolution.set(size.x, size.y)
+      return
+    }
+    if (Array.isArray(material)) {
+      material.forEach((m) => {
+        if (m instanceof LineMaterial) m.resolution.set(size.x, size.y)
+      })
+    }
+  })
+}
+
+function collectMeshes(root: THREE.Object3D): THREE.Object3D[] {
+  const out: THREE.Object3D[] = []
+  root.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) out.push(obj)
+  })
+  return out
+}
+
+function normalizeHexColor(input: string): string | null {
+  const value = input.trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(value)) return value.toUpperCase()
+  return null
 }
 
 function createScene(canvas: HTMLCanvasElement): SceneContext {
@@ -160,10 +223,11 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
 
   const resize = () => {
     const width = canvas.clientWidth
-    const height = canvas.clientHeight
+    const height = Math.max(1, canvas.clientHeight)
     renderer.setSize(width, height, false)
     camera.aspect = width / height
     camera.updateProjectionMatrix()
+    updateEdgeLineResolution(modelRoot, renderer)
   }
   resize()
   window.addEventListener("resize", resize)
@@ -175,70 +239,20 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
     modelRoot,
     dispose: () => {
       window.removeEventListener("resize", resize)
+      disposeObjectResources(modelRoot)
       modelRoot.clear()
       renderer.dispose()
     },
   }
 }
 
-async function renderModelToScene(
+function applyCameraPose(
   ctx: SceneContext,
-  loader: ThreeMFLoader,
-  source: string | File,
-  options: RenderOptions,
+  options: CameraRenderOptions,
 ) {
-  let loaded: THREE.Group
-  if (typeof source === "string") {
-    const base = import.meta.env.BASE_URL
-    const url = `${base}${normalizePath(source)}`
-    loaded = await loader.loadAsync(url)
-  } else {
-    const buffer = await source.arrayBuffer()
-    loaded = loader.parse(buffer)
-  }
-
-  ctx.modelRoot.clear()
-  const model = loaded.clone(true)
-
-  model.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) {
-      obj.castShadow = false
-      obj.receiveShadow = false
-    }
-  })
-
-  const rawBox = new THREE.Box3().setFromObject(model)
-  const rawCenter = rawBox.getCenter(new THREE.Vector3())
-  const rawSize = rawBox.getSize(new THREE.Vector3())
-  const maxEdge = Math.max(rawSize.x, rawSize.y, rawSize.z) || 1
-  const targetMaxEdge = 140 * options.fillRatio
-  const scale = targetMaxEdge / maxEdge
-
-  model.scale.setScalar(scale)
-  model.position.sub(rawCenter.multiplyScalar(scale))
-  const appliedModelRotation: [number, number, number] = [
-    BASE_MODEL_ROTATION_DEG[0] + options.modelRotationDeg[0],
-    BASE_MODEL_ROTATION_DEG[1] + options.modelRotationDeg[1],
-    BASE_MODEL_ROTATION_DEG[2] + options.modelRotationDeg[2],
-  ]
-  model.rotation.set(
-    THREE.MathUtils.degToRad(appliedModelRotation[0]),
-    THREE.MathUtils.degToRad(appliedModelRotation[1]),
-    THREE.MathUtils.degToRad(appliedModelRotation[2]),
-  )
-
-  const scaledBox = new THREE.Box3().setFromObject(model)
-  model.position.y -= scaledBox.min.y
-
-  const centeredBox = new THREE.Box3().setFromObject(model)
+  if (ctx.modelRoot.children.length === 0) return
+  const centeredBox = new THREE.Box3().setFromObject(ctx.modelRoot)
   const finalSize = centeredBox.getSize(new THREE.Vector3())
-  const finalCenter = centeredBox.getCenter(new THREE.Vector3())
-
-  model.position.x -= finalCenter.x
-  model.position.z -= finalCenter.z
-
-  ctx.modelRoot.add(model)
-
   // Keep camera distance fixed so fillRatio truly changes on-screen size.
   const cameraDistance = 280
   const framingTarget = new THREE.Vector3(0, finalSize.y * 0.42, 0)
@@ -276,18 +290,154 @@ async function renderModelToScene(
 
   // User composition tweak after auto-centering.
   const appliedCompositionOffsetX = BASE_COMPOSITION_OFFSET_X + options.compositionOffsetX
-  if (appliedCompositionOffsetX !== 0) {
+  const appliedCompositionOffsetY = BASE_COMPOSITION_OFFSET_Y + options.compositionOffsetY
+  if (appliedCompositionOffsetX !== 0 || appliedCompositionOffsetY !== 0) {
     const dist = ctx.camera.position.distanceTo(lookAt)
     const halfH = Math.tan(THREE.MathUtils.degToRad(ctx.camera.fov * 0.5)) * dist
     const halfW = halfH * ctx.camera.aspect
     const right = new THREE.Vector3()
       .setFromMatrixColumn(ctx.camera.matrixWorld, 0)
       .normalize()
+    const up = new THREE.Vector3()
+      .setFromMatrixColumn(ctx.camera.matrixWorld, 1)
+      .normalize()
     lookAt.addScaledVector(right, appliedCompositionOffsetX * halfW)
+    lookAt.addScaledVector(up, appliedCompositionOffsetY * halfH)
     ctx.camera.lookAt(lookAt)
   }
 
+  updateEdgeLineResolution(ctx.modelRoot, ctx.renderer)
   ctx.renderer.render(ctx.scene, ctx.camera)
+}
+
+async function renderModelToScene(
+  ctx: SceneContext,
+  loader: ThreeMFLoader,
+  source: string | File,
+  modelOptions: ModelRenderOptions,
+  cameraOptions: CameraRenderOptions,
+) {
+  let loaded: THREE.Group
+  if (typeof source === "string") {
+    const base = import.meta.env.BASE_URL
+    const url = `${base}${normalizePath(source)}`
+    loaded = await loader.loadAsync(url)
+  } else {
+    const buffer = await source.arrayBuffer()
+    loaded = loader.parse(buffer)
+  }
+
+  disposeObjectResources(ctx.modelRoot)
+  ctx.modelRoot.clear()
+  const model = loaded.clone(true)
+
+  model.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.castShadow = false
+      obj.receiveShadow = false
+      const tint = new THREE.Color(modelOptions.colorHex)
+      const applyTint = (material: THREE.Material): THREE.Material => {
+        const cloned = material.clone()
+        const materialWithColor = cloned as THREE.Material & {
+          color?: THREE.Color
+          vertexColors?: boolean
+          map?: THREE.Texture | null
+          toneMapped?: boolean
+        }
+        if (materialWithColor.color instanceof THREE.Color) {
+          materialWithColor.color.copy(tint)
+          materialWithColor.needsUpdate = true
+        }
+        if (typeof materialWithColor.vertexColors === "boolean") {
+          materialWithColor.vertexColors = false
+          materialWithColor.needsUpdate = true
+        }
+        if ("map" in materialWithColor && materialWithColor.map) {
+          materialWithColor.map = null
+          materialWithColor.needsUpdate = true
+        }
+        return cloned
+      }
+      if (Array.isArray(obj.material)) {
+        obj.material = obj.material.map(applyTint)
+      } else if (obj.material) {
+        obj.material = applyTint(obj.material)
+      }
+
+      if (modelOptions.edgeEnabled) {
+        try {
+          const merged = mergeVertices(obj.geometry.clone(), 1e-4)
+          const hardEdges = new THREE.EdgesGeometry(merged, 68)
+          merged.dispose()
+          const positions = hardEdges.attributes.position
+          const raw = positions?.array as ArrayLike<number> | undefined
+          let valid = Boolean(raw && raw.length >= 6 && raw.length % 6 === 0)
+          if (valid && raw) {
+            for (let i = 0; i < raw.length; i++) {
+              if (!Number.isFinite(raw[i] ?? NaN)) {
+                valid = false
+                break
+              }
+            }
+          }
+          if (valid && raw) {
+            const edgeGeometry = new LineSegmentsGeometry().setPositions(
+              new Float32Array(raw as ArrayLike<number>),
+            )
+            const edgeMaterial = new LineMaterial({
+              color: new THREE.Color(modelOptions.edgeColorHex),
+              linewidth: THREE.MathUtils.clamp(modelOptions.edgeWidthPx, 0.5, 6),
+              transparent: true,
+              opacity: 0.95,
+              depthTest: true,
+              depthWrite: false,
+            toneMapped: false,
+            })
+            const edgeLines = new LineSegments2(edgeGeometry, edgeMaterial)
+            edgeLines.userData.__itemCardEdge = true
+            edgeLines.renderOrder = 3
+            edgeLines.frustumCulled = false
+            obj.add(edgeLines)
+          }
+          hardEdges.dispose()
+        } catch {
+          // Skip problematic mesh edge generation to avoid breaking whole render.
+        }
+      }
+    }
+  })
+
+  const rawBox = new THREE.Box3().setFromObject(model)
+  const rawCenter = rawBox.getCenter(new THREE.Vector3())
+  const rawSize = rawBox.getSize(new THREE.Vector3())
+  const maxEdge = Math.max(rawSize.x, rawSize.y, rawSize.z) || 1
+  const targetMaxEdge = 140 * modelOptions.fillRatio
+  const scale = targetMaxEdge / maxEdge
+
+  model.scale.setScalar(scale)
+  model.position.sub(rawCenter.multiplyScalar(scale))
+  const appliedModelRotation: [number, number, number] = [
+    BASE_MODEL_ROTATION_DEG[0] + modelOptions.modelRotationDeg[0],
+    BASE_MODEL_ROTATION_DEG[1] + modelOptions.modelRotationDeg[1],
+    BASE_MODEL_ROTATION_DEG[2] + modelOptions.modelRotationDeg[2],
+  ]
+  model.rotation.set(
+    THREE.MathUtils.degToRad(appliedModelRotation[0]),
+    THREE.MathUtils.degToRad(appliedModelRotation[1]),
+    THREE.MathUtils.degToRad(appliedModelRotation[2]),
+  )
+
+  const scaledBox = new THREE.Box3().setFromObject(model)
+  model.position.y -= scaledBox.min.y
+
+  const centeredBox = new THREE.Box3().setFromObject(model)
+  const finalCenter = centeredBox.getCenter(new THREE.Vector3())
+
+  model.position.x -= finalCenter.x
+  model.position.z -= finalCenter.z
+
+  ctx.modelRoot.add(model)
+  applyCameraPose(ctx, cameraOptions)
 }
 
 async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -303,6 +453,21 @@ export default function ItemCardTool() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<SceneContext | null>(null)
   const loaderRef = useRef<ThreeMFLoader | null>(null)
+  const dragStateRef = useRef<{
+    active: boolean
+    pointerId: number | null
+    startX: number
+    startY: number
+    startPovX: number
+    startPovY: number
+  }>({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startPovX: 0,
+    startPovY: 0,
+  })
 
   const [entries, setEntries] = useState<ModelEntry[]>(makeDefaultEntries)
   const [activeId, setActiveId] = useState(entries[0]?.id ?? "")
@@ -317,17 +482,34 @@ export default function ItemCardTool() {
   const [povY, setPovY] = useState(0)
   const [povZ, setPovZ] = useState(0)
   const [fillRatio, setFillRatio] = useState(1)
+  const [modelColorHex, setModelColorHex] = useState("#FFFFFF")
+  const [modelColorInput, setModelColorInput] = useState("#FFFFFF")
+  const [edgeEnabled, setEdgeEnabled] = useState(true)
+  const [edgeColorHex, setEdgeColorHex] = useState("#0F172A")
+  const [edgeColorInput, setEdgeColorInput] = useState("#0F172A")
+  const [edgeWidthPx, setEdgeWidthPx] = useState(1.8)
   const [compositionOffsetX, setCompositionOffsetX] = useState(0)
+  const [compositionOffsetY, setCompositionOffsetY] = useState(0)
 
   const activeEntry = useMemo(() => entries.find((e) => e.id === activeId), [entries, activeId])
-  const renderOptions = useMemo<RenderOptions>(
+  const modelRenderOptions = useMemo<ModelRenderOptions>(
     () => ({
       modelRotationDeg: [rotX, rotY, rotZ],
-      povRotationDeg: [povX, povY, povZ],
       fillRatio,
-      compositionOffsetX,
+      colorHex: modelColorHex,
+      edgeEnabled,
+      edgeColorHex,
+      edgeWidthPx,
     }),
-    [rotX, rotY, rotZ, povX, povY, povZ, fillRatio, compositionOffsetX],
+    [rotX, rotY, rotZ, fillRatio, modelColorHex, edgeEnabled, edgeColorHex, edgeWidthPx],
+  )
+  const cameraRenderOptions = useMemo<CameraRenderOptions>(
+    () => ({
+      povRotationDeg: [povX, povY, povZ],
+      compositionOffsetX,
+      compositionOffsetY,
+    }),
+    [povX, povY, povZ, compositionOffsetX, compositionOffsetY],
   )
   const buildExportMetadata = useCallback((entry: ModelEntry) => ({
     [`${METADATA_PREFIX}.modelPath`]: typeof entry.source === "string" ? normalizePath(entry.source) : entry.source.name,
@@ -342,9 +524,16 @@ export default function ItemCardTool() {
     [`${METADATA_PREFIX}.compositionOffsetX`]: String(num2(compositionOffsetX)),
     [`${METADATA_PREFIX}.compositionBaseOffsetX`]: String(BASE_COMPOSITION_OFFSET_X),
     [`${METADATA_PREFIX}.compositionAppliedOffsetX`]: String(num2(BASE_COMPOSITION_OFFSET_X + compositionOffsetX)),
+    [`${METADATA_PREFIX}.compositionOffsetY`]: String(num2(compositionOffsetY)),
+    [`${METADATA_PREFIX}.compositionBaseOffsetY`]: String(BASE_COMPOSITION_OFFSET_Y),
+    [`${METADATA_PREFIX}.compositionAppliedOffsetY`]: String(num2(BASE_COMPOSITION_OFFSET_Y + compositionOffsetY)),
     [`${METADATA_PREFIX}.fillRatio`]: String(num2(fillRatio)),
+    [`${METADATA_PREFIX}.modelColorHex`]: modelColorHex,
+    [`${METADATA_PREFIX}.edgeEnabled`]: String(edgeEnabled),
+    [`${METADATA_PREFIX}.edgeColorHex`]: edgeColorHex,
+    [`${METADATA_PREFIX}.edgeWidthPx`]: String(num2(edgeWidthPx)),
     [`${METADATA_PREFIX}.exportedAt`]: new Date().toISOString(),
-  }), [compositionOffsetX, exportHeight, exportWidth, fillRatio, povX, povY, povZ, rotX, rotY, rotZ])
+  }), [compositionOffsetX, compositionOffsetY, edgeColorHex, edgeEnabled, edgeWidthPx, exportHeight, exportWidth, fillRatio, modelColorHex, povX, povY, povZ, rotX, rotY, rotZ])
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -363,9 +552,9 @@ export default function ItemCardTool() {
     if (!scene || !loader || !canvasRef.current) return
     const label = sourceLabel(entry)
     setStatus(`渲染中：${label}`)
-    await renderModelToScene(scene, loader, entry.source, renderOptions)
+    await renderModelToScene(scene, loader, entry.source, modelRenderOptions, cameraRenderOptions)
     setStatus(`已渲染：${label}`)
-  }, [renderOptions])
+  }, [cameraRenderOptions, modelRenderOptions])
 
   useEffect(() => {
     if (!activeEntry) return
@@ -373,6 +562,11 @@ export default function ItemCardTool() {
       setStatus(`渲染失败：${String(e)}`)
     })
   }, [activeEntry, renderOne])
+
+  useEffect(() => {
+    if (!sceneRef.current) return
+    applyCameraPose(sceneRef.current, cameraRenderOptions)
+  }, [cameraRenderOptions])
 
   const withExportSize = useCallback(async <T,>(run: () => Promise<T>): Promise<T | undefined> => {
     const scene = sceneRef.current
@@ -453,7 +647,6 @@ export default function ItemCardTool() {
     input.type = "file"
     input.multiple = true
     input.accept = ".3mf"
-    // @ts-expect-error webkitdirectory is non-standard
     input.webkitdirectory = true
     input.onchange = () => {
       const files = Array.from(input.files ?? []).filter((f) =>
@@ -466,7 +659,9 @@ export default function ItemCardTool() {
         displayName: f.name.replace(/\.3mf$/i, ""),
       }))
       setEntries(newEntries)
-      setActiveId(newEntries[0].id)
+      if (newEntries[0]) {
+        setActiveId(newEntries[0].id)
+      }
       setStatus(`已加载 ${newEntries.length} 个文件`)
     }
     input.click()
@@ -496,7 +691,7 @@ export default function ItemCardTool() {
   const handleRemoveEntry = useCallback((id: string) => {
     setEntries((prev) => {
       const next = prev.filter((e) => e.id !== id)
-      if (activeId === id && next.length > 0) {
+      if (activeId === id && next[0]) {
         setActiveId(next[0].id)
       }
       return next
@@ -552,6 +747,64 @@ export default function ItemCardTool() {
       setBusy(false)
     }
   }, [entries])
+
+  const handleModelColorBlur = useCallback(() => {
+    const normalized = normalizeHexColor(modelColorInput)
+    if (!normalized) {
+      setModelColorInput(modelColorHex)
+      return
+    }
+    setModelColorHex(normalized)
+    if (modelColorInput !== normalized) setModelColorInput(normalized)
+  }, [modelColorHex, modelColorInput])
+
+  const handleEdgeColorBlur = useCallback(() => {
+    const normalized = normalizeHexColor(edgeColorInput)
+    if (!normalized) {
+      setEdgeColorInput(edgeColorHex)
+      return
+    }
+    setEdgeColorHex(normalized)
+    if (edgeColorInput !== normalized) setEdgeColorInput(normalized)
+  }, [edgeColorHex, edgeColorInput])
+
+  const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    dragStateRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startPovX: povX,
+      startPovY: povY,
+    }
+    canvas.setPointerCapture(e.pointerId)
+  }, [povX, povY])
+
+  const handleCanvasPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const state = dragStateRef.current
+    if (!state.active || state.pointerId !== e.pointerId) return
+    const dx = e.clientX - state.startX
+    const dy = e.clientY - state.startY
+    const sensitivity = 0.18
+    setPovY(num2(state.startPovY - dx * sensitivity))
+    setPovX(num2(state.startPovX + dy * sensitivity))
+  }, [])
+
+  const handleCanvasPointerEnd = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const state = dragStateRef.current
+    if (!state.active) return
+    if (state.pointerId === e.pointerId) {
+      const canvas = canvasRef.current
+      if (canvas?.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId)
+      }
+      dragStateRef.current.active = false
+      dragStateRef.current.pointerId = null
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#111] text-white">
@@ -734,17 +987,97 @@ export default function ItemCardTool() {
               className="mt-1 w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs outline-none focus:border-white/40"
             />
           </label>
+          <label className="mt-2 block text-xs text-white/80">
+            构图偏移 Y（-1 ~ 1，默认 0）
+            <input
+              type="number"
+              step={0.1}
+              value={compositionOffsetY}
+              onChange={(e) => setCompositionOffsetY(Number(e.target.value) || 0)}
+              className="mt-1 w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs outline-none focus:border-white/40"
+            />
+          </label>
 
           <label className="mt-3 block text-xs text-white/80">
             模型占比（{fillRatio.toFixed(2)}x）
           </label>
           <input
             type="range"
-            min={0.6}
+            min={0.4}
             max={1.6}
             step={0.05}
             value={fillRatio}
             onChange={(e) => setFillRatio(Number(e.target.value))}
+            className="mt-1 w-full"
+          />
+
+          <label className="mt-3 block text-xs text-white/80">
+            模型颜色（HEX）
+            <div className="mt-1 flex gap-2">
+              <input
+                type="text"
+                value={modelColorInput}
+                onChange={(e) => setModelColorInput(e.target.value)}
+                onBlur={handleModelColorBlur}
+                placeholder="#FFFFFF"
+                className="w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs uppercase outline-none focus:border-white/40"
+              />
+              <input
+                type="color"
+                value={modelColorHex}
+                onChange={(e) => {
+                  const next = e.target.value.toUpperCase()
+                  setModelColorHex(next)
+                  setModelColorInput(next)
+                }}
+                className="h-9 w-10 shrink-0 cursor-pointer rounded border border-white/20 bg-black/35 p-1"
+                title="颜色选择"
+              />
+            </div>
+          </label>
+
+          <label className="mt-3 flex items-center gap-2 text-xs text-white/80">
+            <input
+              type="checkbox"
+              checked={edgeEnabled}
+              onChange={(e) => setEdgeEnabled(e.target.checked)}
+            />
+            渲染边线
+          </label>
+          <label className="mt-2 block text-xs text-white/80">
+            边线颜色（HEX）
+            <div className="mt-1 flex gap-2">
+              <input
+                type="text"
+                value={edgeColorInput}
+                onChange={(e) => setEdgeColorInput(e.target.value)}
+                onBlur={handleEdgeColorBlur}
+                placeholder="#0F172A"
+                className="w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs uppercase outline-none focus:border-white/40"
+              />
+              <input
+                type="color"
+                value={edgeColorHex}
+                onChange={(e) => {
+                  const next = e.target.value.toUpperCase()
+                  setEdgeColorHex(next)
+                  setEdgeColorInput(next)
+                }}
+                className="h-9 w-10 shrink-0 cursor-pointer rounded border border-white/20 bg-black/35 p-1"
+                title="边线颜色"
+              />
+            </div>
+          </label>
+          <label className="mt-2 block text-xs text-white/80">
+            边线粗细（{edgeWidthPx.toFixed(1)} px）
+          </label>
+          <input
+            type="range"
+            min={0.5}
+            max={6}
+            step={0.1}
+            value={edgeWidthPx}
+            onChange={(e) => setEdgeWidthPx(Number(e.target.value))}
             className="mt-1 w-full"
           />
 
@@ -771,8 +1104,18 @@ export default function ItemCardTool() {
         </div>
 
         <div className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#1b1b1b] p-3">
+          <p className="mb-2 text-xs text-white/65">
+            预览区拖动可旋转视角（左右=POV Y，上下=POV X），左侧数值会实时回填。
+          </p>
           <div className="h-[720px] overflow-hidden rounded-lg bg-[linear-gradient(45deg,#242424_25%,transparent_25%),linear-gradient(-45deg,#242424_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#242424_75%),linear-gradient(-45deg,transparent_75%,#242424_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0px]">
-            <canvas ref={canvasRef} className="h-full w-full" />
+            <canvas
+              ref={canvasRef}
+              className="h-full w-full touch-none cursor-grab active:cursor-grabbing"
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerEnd}
+              onPointerCancel={handleCanvasPointerEnd}
+            />
           </div>
         </div>
       </div>

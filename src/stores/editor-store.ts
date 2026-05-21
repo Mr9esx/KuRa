@@ -20,6 +20,7 @@ interface EditorState {
   placements: Placement[]
   selectedCatalogSku: string | null
   selectedPlacementId: string | null
+  placementDragActive: boolean
   hoveredCell: [number, number] | null
   materialColorId: string
   blockColorId: string
@@ -31,6 +32,7 @@ interface EditorActions {
   setBlock: (block: BlockCatalogItem) => void
   selectCatalogItem: (sku: string | null) => void
   selectPlacement: (id: string | null) => void
+  setPlacementDragActive: (active: boolean) => void
   setHoveredCell: (cell: [number, number] | null) => void
   placeItem: (col: number, row: number) => void
   placeItemBySku: (sku: string, col: number, row: number) => void
@@ -82,6 +84,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
     placements: [],
     selectedCatalogSku: null,
     selectedPlacementId: null,
+    placementDragActive: false,
     hoveredCell: null,
     materialColorId: "ivory",
     blockColorId: "ivory",
@@ -94,6 +97,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.placements = []
         state.hoveredCell = null
         state.selectedPlacementId = null
+        state.placementDragActive = false
       }),
 
     selectCatalogItem: (sku) =>
@@ -111,6 +115,11 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         if (id) {
           state.selectedCatalogSku = null
         }
+      }),
+
+    setPlacementDragActive: (active) =>
+      set((state) => {
+        state.placementDragActive = active
       }),
 
     setHoveredCell: (cell) =>
@@ -164,6 +173,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         if (state.selectedPlacementId === id) {
           state.selectedPlacementId = null
         }
+        state.placementDragActive = false
       }),
 
     clearAll: () =>
@@ -171,6 +181,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.placements = []
         state.hoveredCell = null
         state.selectedPlacementId = null
+        state.placementDragActive = false
       }),
 
     setMaterialColor: (id) =>

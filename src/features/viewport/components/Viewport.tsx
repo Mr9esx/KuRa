@@ -13,7 +13,7 @@ import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
 import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
-import type { Preset } from "@/types/catalog"
+import { getCatalogItemDisplayName, type Preset } from "@/types/catalog"
 import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp, Maximize, Minimize } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -33,6 +33,11 @@ import { PlacedItems } from "./PlacedItems"
 import { GhostPreview } from "./GhostPreview"
 import { TourGhostItem } from "./TourGhostItem"
 import { ViewCube, cameraTweenRef } from "./ViewCube"
+
+function getItemNameBySku(sku: string): string {
+  const item = findItemBySku(sku)
+  return item ? getCatalogItemDisplayName(item) : sku
+}
 
 function clampDirectionPolar(dir: THREE.Vector3, minPolar: number, maxPolar: number): THREE.Vector3 {
   const theta = Math.acos(Math.max(-1, Math.min(1, dir.y)))
@@ -577,7 +582,7 @@ export function MobileActionBar() {
     }
     const list = Array.from(counter.entries()).map(([sku, qty]) => ({
       sku,
-      name: findItemBySku(sku)?.name ?? sku,
+      name: getItemNameBySku(sku),
       qty,
     }))
     const payload = {
@@ -608,7 +613,7 @@ export function MobileActionBar() {
       block: { sku: block.sku, name: block.name },
       items: Array.from(counter.entries()).map(([sku, qty]) => ({
         sku,
-        name: findItemBySku(sku)?.name ?? sku,
+        name: getItemNameBySku(sku),
         qty,
       })),
     }
@@ -860,7 +865,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     }
     const list = Array.from(counter.entries()).map(([sku, qty]) => ({
       sku,
-      name: findItemBySku(sku)?.name ?? sku,
+      name: getItemNameBySku(sku),
       qty,
     }))
     const payload = {
@@ -891,7 +896,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       block: { sku: block.sku, name: block.name },
       items: Array.from(counter.entries()).map(([sku, qty]) => ({
         sku,
-        name: findItemBySku(sku)?.name ?? sku,
+        name: getItemNameBySku(sku),
         qty,
       })),
     }

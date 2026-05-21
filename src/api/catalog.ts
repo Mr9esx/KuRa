@@ -11,7 +11,13 @@ export async function fetchBlocks(): Promise<BlockCatalogItem[]> {
 export async function fetchItems(): Promise<CatalogItem[]> {
   const res = await fetch(`${BASE}data/items.json`)
   if (!res.ok) throw new Error(`Failed to fetch items: ${res.status}`)
-  return res.json()
+  const rawItems = (await res.json()) as CatalogItem[]
+  return rawItems
+    .map((item, index) => ({
+      ...item,
+      order: Number.isFinite(item.order) ? item.order : index + 1,
+    }))
+    .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.sku.localeCompare(b.sku))
 }
 
 export async function fetchPresets(): Promise<Preset[]> {

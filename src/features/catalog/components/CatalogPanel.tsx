@@ -8,7 +8,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
-import type { BlockCatalogItem, CatalogItem } from "@/types/catalog"
+import { getCatalogItemDisplayName, type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
 import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
@@ -494,7 +494,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         {imageSrc ? (
                           <img
                             src={imageSrc}
-                            alt={item.name}
+                            alt={getCatalogItemDisplayName(item)}
                             className="h-full w-full rounded-md object-contain"
                             loading="lazy"
                           />
@@ -514,11 +514,13 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         )}
                       </div>
                       <div className="text-[11px] font-medium leading-tight">
-                        {item.name}
+                        {getCatalogItemDisplayName(item)}
                       </div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">
-                        {item.gridSize[0]}×{item.gridSize[1]}
-                      </div>
+                      {item.desc ? (
+                        <div className="mt-0.5 min-h-[24px] text-[10px] leading-tight text-muted-foreground/90">
+                          {item.desc}
+                        </div>
+                      ) : null}
                     </button>
                       )
                     })()
@@ -772,7 +774,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                     {imageSrc ? (
                       <img
                         src={imageSrc}
-                        alt={item.name}
+                        alt={getCatalogItemDisplayName(item)}
                         className="h-full w-full rounded-md object-contain"
                         loading="lazy"
                       />
@@ -792,11 +794,13 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                     )}
                   </div>
                   <div className="text-xs font-medium leading-tight">
-                    {item.name}
+                    {getCatalogItemDisplayName(item)}
                   </div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground">
-                    {gridX}×{gridY} · H{item.height}
-                  </div>
+                  {item.desc ? (
+                    <div className="mt-0.5 min-h-[24px] text-[10px] leading-tight text-muted-foreground/90">
+                      {item.desc}
+                    </div>
+                  ) : null}
                 </button>
                   )
                 })()

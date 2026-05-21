@@ -65,9 +65,7 @@ export function CellGrid({ block, onCellHover, onCellClick }: CellGridProps) {
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            count={linePositions.length / 3}
-            array={linePositions}
-            itemSize={3}
+            args={[linePositions, 3]}
           />
         </bufferGeometry>
         <lineBasicMaterial color="#aaa" transparent opacity={0.35} />

@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Dialog } from "@base-ui/react/dialog"
 import { X, LayoutGrid, List } from "lucide-react"
-import type { Preset } from "@/types/catalog"
+import { getCatalogItemDisplayName, type Preset } from "@/types/catalog"
 import { findItemBySku } from "@/hooks/use-catalog"
 import { useEditorStore } from "@/stores/editor-store"
 import { cn } from "@/lib/utils"
@@ -25,7 +25,7 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
 
   const itemList = Array.from(itemCounts.entries()).map(([sku, count]) => {
     const item = findItemBySku(sku)
-    return { sku, count, name: item?.name ?? sku, gridSize: item?.gridSize }
+    return { sku, count, name: item ? getCatalogItemDisplayName(item) : sku, gridSize: item?.gridSize }
   })
 
   const handleApply = () => {

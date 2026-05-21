@@ -22,6 +22,7 @@ interface TourStep {
 
 let initialCell: [number, number] | null = null
 let countBeforeDelete = 0
+let selectedInDeleteStep = false
 
 function getSteps(mobile: boolean): TourStep[] {
   return [
@@ -38,7 +39,7 @@ function getSteps(mobile: boolean): TourStep[] {
       title: "放置到框体中",
       desc: "点击网格中的任意位置，把它放进去。",
       targetId: "tour-viewport",
-      position: "inside",
+      position: mobile ? "bottom" : "inside",
       waitFor: () => useEditorStore.getState().placements.length > 0,
     },
     {
@@ -46,7 +47,7 @@ function getSteps(mobile: boolean): TourStep[] {
       title: "选中已放置的收纳件",
       desc: "点击它，试试选中它。",
       targetId: "tour-viewport",
-      position: "inside",
+      position: mobile ? "bottom" : "inside",
       onEnter: () => {
         useEditorStore.getState().selectPlacement(null)
         useEditorStore.getState().selectCatalogItem(null)
@@ -60,10 +61,11 @@ function getSteps(mobile: boolean): TourStep[] {
         ? "按住它拖动到其他网格位置，松手即可放置。"
         : "按住并拖动它到其他网格位置。",
       targetId: "tour-viewport",
-      position: "inside",
+      position: mobile ? "bottom" : "inside",
       onEnter: () => {
         const p = useEditorStore.getState().placements[0]
         initialCell = p ? [p.cell[0], p.cell[1]] : null
+        useEditorStore.getState().setPlacementDragActive(false)
       },
       waitFor: () => {
         if (!initialCell) return false
@@ -71,7 +73,7 @@ function getSteps(mobile: boolean): TourStep[] {
         const p = s.placements[0]
         if (!p) return false
         const moved = p.cell[0] !== initialCell[0] || p.cell[1] !== initialCell[1]
-        return moved && s.hoveredCell === null
+        return moved && !s.placementDragActive
       },
     },
     {
@@ -84,10 +86,19 @@ function getSteps(mobile: boolean): TourStep[] {
       position: mobile ? "top" : "bottom",
       showOverlay: false,
       onEnter: () => {
+        // 强制用户在本步骤重新完成“选中 -> 删除”的完整动作
+        useEditorStore.getState().selectPlacement(null)
+        useEditorStore.getState().selectCatalogItem(null)
+        selectedInDeleteStep = false
         countBeforeDelete = useEditorStore.getState().placements.length
       },
-      waitFor: () =>
-        useEditorStore.getState().placements.length < countBeforeDelete,
+      waitFor: () => {
+        const s = useEditorStore.getState()
+        if (s.selectedPlacementId) {
+          selectedInDeleteStep = true
+        }
+        return selectedInDeleteStep && s.placements.length < countBeforeDelete
+      },
     },
   ]
 }

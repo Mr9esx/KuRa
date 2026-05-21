@@ -8,6 +8,7 @@ import type { Placement } from "@/types/editor"
 import { cellToWorld } from "@/lib/coordinates"
 import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku } from "@/hooks/use-catalog"
+import { useEditorStore } from "@/stores/editor-store"
 
 interface PlacedItemsProps {
   block: BlockCatalogItem
@@ -26,6 +27,7 @@ interface PlacementEventHandlers {
   onPointerDown: (e: ThreeEvent<PointerEvent>) => void
   onPointerMove: (e: ThreeEvent<PointerEvent>) => void
   onPointerUp: (e: ThreeEvent<PointerEvent>) => void
+  onPointerCancel: (e: ThreeEvent<PointerEvent>) => void
   onClick: (e: ThreeEvent<MouseEvent>) => void
 }
 
@@ -124,6 +126,7 @@ function PlacedModel({
       onPointerDown={events.onPointerDown}
       onPointerMove={events.onPointerMove}
       onPointerUp={events.onPointerUp}
+      onPointerCancel={events.onPointerCancel}
       onClick={events.onClick}
     >
       <primitive
@@ -184,8 +187,14 @@ export function PlacedItems({
             const allowImmediateDrag =
               e.pointerType === "mouse" || (!!mobile && e.pointerType !== "mouse")
             if (!selected && !allowImmediateDrag) return
-            e.target.setPointerCapture(e.pointerId)
+            const target = e.target as EventTarget & {
+              setPointerCapture?: (pointerId: number) => void
+              hasPointerCapture?: (pointerId: number) => boolean
+              releasePointerCapture?: (pointerId: number) => void
+            }
+            target.setPointerCapture?.(e.pointerId)
             onDragPlacementChange(p.id)
+            useEditorStore.getState().setPlacementDragActive(true)
           },
           onPointerMove: (e: ThreeEvent<PointerEvent>) => {
             e.stopPropagation()
@@ -197,10 +206,29 @@ export function PlacedItems({
           },
           onPointerUp: (e: ThreeEvent<PointerEvent>) => {
             e.stopPropagation()
-            if (e.target.hasPointerCapture(e.pointerId)) {
-              e.target.releasePointerCapture(e.pointerId)
+            const target = e.target as EventTarget & {
+              setPointerCapture?: (pointerId: number) => void
+              hasPointerCapture?: (pointerId: number) => boolean
+              releasePointerCapture?: (pointerId: number) => void
+            }
+            if (target.hasPointerCapture?.(e.pointerId)) {
+              target.releasePointerCapture?.(e.pointerId)
             }
             onDragPlacementChange(null)
+            useEditorStore.getState().setPlacementDragActive(false)
+          },
+          onPointerCancel: (e: ThreeEvent<PointerEvent>) => {
+            e.stopPropagation()
+            const target = e.target as EventTarget & {
+              setPointerCapture?: (pointerId: number) => void
+              hasPointerCapture?: (pointerId: number) => boolean
+              releasePointerCapture?: (pointerId: number) => void
+            }
+            if (target.hasPointerCapture?.(e.pointerId)) {
+              target.releasePointerCapture?.(e.pointerId)
+            }
+            onDragPlacementChange(null)
+            useEditorStore.getState().setPlacementDragActive(false)
           },
           onClick: (e: ThreeEvent<MouseEvent>) => {
             e.stopPropagation()
@@ -232,6 +260,7 @@ export function PlacedItems({
             onPointerDown={events.onPointerDown}
             onPointerMove={events.onPointerMove}
             onPointerUp={events.onPointerUp}
+            onPointerCancel={events.onPointerCancel}
             onClick={events.onClick}
           >
             <boxGeometry args={[w, p.height, d]} />
