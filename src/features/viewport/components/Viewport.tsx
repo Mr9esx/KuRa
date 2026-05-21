@@ -203,7 +203,7 @@ function Scene({
         maxDistance={800}
         enableDamping
         dampingFactor={0.1}
-        target={[0, 0, 0]}
+        target={[0, 20, 0]}
         enabled={controlsEnabled}
       />
 
