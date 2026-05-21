@@ -4,11 +4,24 @@ import JSZip from "jszip"
 import { saveAs } from "file-saver"
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
 
-const DEFAULT_MODELS = [
-  "models/items/B-2x1-H20-八小格.3mf",
-  "models/items/B-2x1-H40-八小格.3mf",
-  "models/items/B-2x1-H80-八小格.3mf",
-]
+interface ModelEntry {
+  id: string
+  source: string | File
+  displayName: string
+}
+
+function makeDefaultEntries(): ModelEntry[] {
+  const paths = [
+    "models/items/B-2x1-H20-八小格.3mf",
+    "models/items/B-2x1-H40-八小格.3mf",
+    "models/items/B-2x1-H80-八小格.3mf",
+  ]
+  return paths.map((p, i) => ({
+    id: `default-${i}`,
+    source: p,
+    displayName: p.split("/").pop()?.replace(/\.3mf$/i, "") ?? `item-${i}`,
+  }))
+}
 const BASE_MODEL_ROTATION_DEG: [number, number, number] = [-90, 0, 0]
 const BASE_POV_OFFSET_DEG: [number, number, number] = [-10, 0, 0]
 const BASE_COMPOSITION_OFFSET_X = -0.06
@@ -17,9 +30,14 @@ function normalizePath(path: string) {
   return path.trim().replace(/^\//, "")
 }
 
-function toPngName(modelPath: string) {
-  const name = modelPath.split("/").pop() ?? "item"
-  return name.replace(/\.3mf$/i, ".png")
+function toPngName(entry: ModelEntry) {
+  return `${entry.displayName}.png`
+}
+
+function sourceLabel(entry: ModelEntry) {
+  return typeof entry.source === "string"
+    ? entry.source
+    : entry.source.name
 }
 
 function crc32(bytes: Uint8Array): number {
@@ -165,12 +183,18 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
 async function renderModelToScene(
   ctx: SceneContext,
   loader: ThreeMFLoader,
-  modelPath: string,
+  source: string | File,
   options: RenderOptions,
 ) {
-  const base = import.meta.env.BASE_URL
-  const url = `${base}${normalizePath(modelPath)}`
-  const loaded = await loader.loadAsync(url)
+  let loaded: THREE.Group
+  if (typeof source === "string") {
+    const base = import.meta.env.BASE_URL
+    const url = `${base}${normalizePath(source)}`
+    loaded = await loader.loadAsync(url)
+  } else {
+    const buffer = await source.arrayBuffer()
+    loaded = loader.parse(buffer)
+  }
 
   ctx.modelRoot.clear()
   const model = loaded.clone(true)
@@ -279,8 +303,8 @@ export default function ItemCardTool() {
   const sceneRef = useRef<SceneContext | null>(null)
   const loaderRef = useRef<ThreeMFLoader | null>(null)
 
-  const [modelListText, setModelListText] = useState(DEFAULT_MODELS.join("\n"))
-  const [activePath, setActivePath] = useState(DEFAULT_MODELS[0])
+  const [entries, setEntries] = useState<ModelEntry[]>(makeDefaultEntries)
+  const [activeId, setActiveId] = useState(entries[0]?.id ?? "")
   const [status, setStatus] = useState("就绪")
   const [busy, setBusy] = useState(false)
   const [exportWidth, setExportWidth] = useState(1024)
@@ -294,10 +318,7 @@ export default function ItemCardTool() {
   const [fillRatio, setFillRatio] = useState(1)
   const [compositionOffsetX, setCompositionOffsetX] = useState(0)
 
-  const modelPaths = useMemo(
-    () => modelListText.split("\n").map(normalizePath).filter(Boolean),
-    [modelListText],
-  )
+  const activeEntry = useMemo(() => entries.find((e) => e.id === activeId), [entries, activeId])
   const renderOptions = useMemo<RenderOptions>(
     () => ({
       modelRotationDeg: [rotX, rotY, rotZ],
@@ -307,8 +328,9 @@ export default function ItemCardTool() {
     }),
     [rotX, rotY, rotZ, povX, povY, povZ, fillRatio, compositionOffsetX],
   )
-  const buildExportMetadata = useCallback((modelPath: string) => ({
-    "kura.modelPath": normalizePath(modelPath),
+  const buildExportMetadata = useCallback((entry: ModelEntry) => ({
+    "kura.modelPath": typeof entry.source === "string" ? normalizePath(entry.source) : entry.source.name,
+    "kura.displayName": entry.displayName,
     "kura.exportSize": `${Math.max(64, Math.floor(exportWidth))}x${Math.max(64, Math.floor(exportHeight))}`,
     "kura.rotationDeg": `${num2(rotX)},${num2(rotY)},${num2(rotZ)}`,
     "kura.modelBaseRotationDeg": `${BASE_MODEL_ROTATION_DEG[0]},${BASE_MODEL_ROTATION_DEG[1]},${BASE_MODEL_ROTATION_DEG[2]}`,
@@ -334,21 +356,22 @@ export default function ItemCardTool() {
     }
   }, [])
 
-  const renderOne = useCallback(async (path: string) => {
+  const renderOne = useCallback(async (entry: ModelEntry) => {
     const scene = sceneRef.current
     const loader = loaderRef.current
     if (!scene || !loader || !canvasRef.current) return
-    setStatus(`渲染中：${path}`)
-    await renderModelToScene(scene, loader, path, renderOptions)
-    setStatus(`已渲染：${path}`)
+    const label = sourceLabel(entry)
+    setStatus(`渲染中：${label}`)
+    await renderModelToScene(scene, loader, entry.source, renderOptions)
+    setStatus(`已渲染：${label}`)
   }, [renderOptions])
 
   useEffect(() => {
-    if (!activePath) return
-    renderOne(activePath).catch((e) => {
+    if (!activeEntry) return
+    renderOne(activeEntry).catch((e) => {
       setStatus(`渲染失败：${String(e)}`)
     })
-  }, [activePath, renderOne])
+  }, [activeEntry, renderOne])
 
   const withExportSize = useCallback(async <T,>(run: () => Promise<T>): Promise<T | undefined> => {
     const scene = sceneRef.current
@@ -378,77 +401,237 @@ export default function ItemCardTool() {
   }, [exportHeight, exportWidth])
 
   const handleDownloadCurrent = useCallback(async () => {
-    if (!canvasRef.current || !activePath) return
+    if (!canvasRef.current || !activeEntry) return
     setBusy(true)
     try {
       const blob = await withExportSize(async () => {
-        await renderOne(activePath)
+        await renderOne(activeEntry)
         const raw = await canvasToBlob(canvasRef.current!)
-        return embedPngTextMetadata(raw, buildExportMetadata(activePath))
+        return embedPngTextMetadata(raw, buildExportMetadata(activeEntry))
       })
       if (!blob) throw new Error("PNG 生成失败")
-      saveAs(blob, toPngName(activePath))
-      setStatus(`已导出：${toPngName(activePath)}（${exportWidth}x${exportHeight}）`)
+      const pngName = toPngName(activeEntry)
+      saveAs(blob, pngName)
+      setStatus(`已导出：${pngName}（${exportWidth}x${exportHeight}）`)
     } catch (e) {
       setStatus(`导出失败：${String(e)}`)
     } finally {
       setBusy(false)
     }
-  }, [activePath, exportHeight, exportWidth, renderOne, withExportSize])
+  }, [activeEntry, buildExportMetadata, exportHeight, exportWidth, renderOne, withExportSize])
 
   const handleDownloadZip = useCallback(async () => {
-    if (!canvasRef.current || modelPaths.length === 0) return
+    if (!canvasRef.current || entries.length === 0) return
     setBusy(true)
     const zip = new JSZip()
     try {
       await withExportSize(async () => {
-        for (const path of modelPaths) {
-          await renderOne(path)
+        for (const entry of entries) {
+          await renderOne(entry)
           const raw = await canvasToBlob(canvasRef.current!)
-          const blob = await embedPngTextMetadata(raw, buildExportMetadata(path))
-          zip.file(toPngName(path), blob)
+          const blob = await embedPngTextMetadata(raw, buildExportMetadata(entry))
+          zip.file(toPngName(entry), blob)
         }
         return true
       })
       const out = await zip.generateAsync({ type: "blob" })
       saveAs(out, "item-card-images.zip")
-      setStatus(`已批量导出：${modelPaths.length} 张（${exportWidth}x${exportHeight}）`)
+      setStatus(`已批量导出：${entries.length} 张（${exportWidth}x${exportHeight}）`)
     } catch (e) {
       setStatus(`批量导出失败：${String(e)}`)
     } finally {
       setBusy(false)
-      if (activePath) {
-        renderOne(activePath).catch(() => {})
+      if (activeEntry) {
+        renderOne(activeEntry).catch(() => {})
       }
     }
-  }, [activePath, buildExportMetadata, exportHeight, exportWidth, modelPaths, renderOne, withExportSize])
+  }, [activeEntry, buildExportMetadata, entries, exportHeight, exportWidth, renderOne, withExportSize])
+
+  const handleOpenFolder = useCallback(async () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.multiple = true
+    input.accept = ".3mf"
+    // @ts-expect-error webkitdirectory is non-standard
+    input.webkitdirectory = true
+    input.onchange = () => {
+      const files = Array.from(input.files ?? []).filter((f) =>
+        f.name.toLowerCase().endsWith(".3mf"),
+      )
+      if (files.length === 0) return
+      const newEntries: ModelEntry[] = files.map((f, i) => ({
+        id: `local-${Date.now()}-${i}`,
+        source: f,
+        displayName: f.name.replace(/\.3mf$/i, ""),
+      }))
+      setEntries(newEntries)
+      setActiveId(newEntries[0].id)
+      setStatus(`已加载 ${newEntries.length} 个文件`)
+    }
+    input.click()
+  }, [])
+
+  const handleAddFiles = useCallback(() => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.multiple = true
+    input.accept = ".3mf"
+    input.onchange = () => {
+      const files = Array.from(input.files ?? []).filter((f) =>
+        f.name.toLowerCase().endsWith(".3mf"),
+      )
+      if (files.length === 0) return
+      const newEntries: ModelEntry[] = files.map((f, i) => ({
+        id: `local-${Date.now()}-${i}`,
+        source: f,
+        displayName: f.name.replace(/\.3mf$/i, ""),
+      }))
+      setEntries((prev) => [...prev, ...newEntries])
+      setStatus(`已添加 ${newEntries.length} 个文件`)
+    }
+    input.click()
+  }, [])
+
+  const handleRemoveEntry = useCallback((id: string) => {
+    setEntries((prev) => {
+      const next = prev.filter((e) => e.id !== id)
+      if (activeId === id && next.length > 0) {
+        setActiveId(next[0].id)
+      }
+      return next
+    })
+  }, [activeId])
+
+  const handleRenameEntry = useCallback((id: string, newName: string) => {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, displayName: newName } : e)),
+    )
+  }, [])
+
+  const handleSaveRenamed = useCallback(async (entry: ModelEntry) => {
+    try {
+      let blob: Blob
+      if (typeof entry.source === "string") {
+        const base = import.meta.env.BASE_URL
+        const url = `${base}${normalizePath(entry.source)}`
+        const res = await fetch(url)
+        blob = await res.blob()
+      } else {
+        blob = entry.source
+      }
+      saveAs(blob, `${entry.displayName}.3mf`)
+      setStatus(`已保存：${entry.displayName}.3mf`)
+    } catch (e) {
+      setStatus(`保存失败：${String(e)}`)
+    }
+  }, [])
+
+  const handleSaveAllRenamed = useCallback(async () => {
+    setBusy(true)
+    const zip = new JSZip()
+    try {
+      for (const entry of entries) {
+        let blob: Blob
+        if (typeof entry.source === "string") {
+          const base = import.meta.env.BASE_URL
+          const url = `${base}${normalizePath(entry.source)}`
+          const res = await fetch(url)
+          blob = await res.blob()
+        } else {
+          blob = entry.source
+        }
+        zip.file(`${entry.displayName}.3mf`, blob)
+      }
+      const out = await zip.generateAsync({ type: "blob" })
+      saveAs(out, "renamed-models.zip")
+      setStatus(`已批量保存 ${entries.length} 个重命名模型`)
+    } catch (e) {
+      setStatus(`批量保存失败：${String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [entries])
 
   return (
     <div className="min-h-screen bg-[#111] text-white">
       <div className="mx-auto flex max-w-[1200px] gap-4 p-4">
-        <div className="w-[340px] shrink-0 rounded-xl border border-white/15 bg-white/5 p-4">
+        <div className="w-[380px] shrink-0 rounded-xl border border-white/15 bg-white/5 p-4">
           <h1 className="text-lg font-semibold">3MF Item Card 出图工具</h1>
           <p className="mt-1 text-xs text-white/70">
             视角固定为左前斜上（适合卡片图），PNG 透明背景。
           </p>
 
-          <label className="mt-4 block text-xs text-white/80">模型路径（每行一个，相对 public）</label>
-          <textarea
-            value={modelListText}
-            onChange={(e) => setModelListText(e.target.value)}
-            className="mt-1 h-40 w-full resize-y rounded-md border border-white/20 bg-black/35 p-2 text-xs outline-none focus:border-white/40"
-          />
+          <div className="mt-4 flex items-center gap-2">
+            <span className="text-xs text-white/80">模型列表</span>
+            <button
+              type="button"
+              onClick={handleOpenFolder}
+              className="rounded-md border border-white/25 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
+            >
+              打开文件夹
+            </button>
+            <button
+              type="button"
+              onClick={handleAddFiles}
+              className="rounded-md border border-white/25 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
+            >
+              添加文件
+            </button>
+          </div>
 
-          <label className="mt-3 block text-xs text-white/80">当前预览</label>
-          <select
-            value={activePath}
-            onChange={(e) => setActivePath(e.target.value)}
-            className="mt-1 w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs outline-none focus:border-white/40"
-          >
-            {modelPaths.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+          <div className="mt-2 max-h-[240px] overflow-y-auto rounded-md border border-white/15 bg-black/30">
+            {entries.length === 0 ? (
+              <p className="p-3 text-center text-xs text-white/40">暂无模型，请打开文件夹或添加文件</p>
+            ) : (
+              entries.map((entry) => (
+                <div
+                  key={entry.id}
+                  onClick={() => setActiveId(entry.id)}
+                  className={`flex cursor-pointer items-center gap-2 border-b border-white/8 px-2 py-1.5 last:border-b-0 ${
+                    activeId === entry.id ? "bg-white/10" : "hover:bg-white/5"
+                  }`}
+                >
+                  <span className="shrink-0 text-[10px] text-white/30">
+                    {activeId === entry.id ? "●" : "○"}
+                  </span>
+                  <input
+                    type="text"
+                    value={entry.displayName}
+                    onChange={(e) => handleRenameEntry(entry.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="min-w-0 flex-1 bg-transparent text-xs outline-none focus:underline focus:decoration-white/40"
+                    title={sourceLabel(entry)}
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 text-[10px] text-white/30 hover:text-blue-400"
+                    onClick={(e) => { e.stopPropagation(); handleSaveRenamed(entry) }}
+                    title="下载重命名文件"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[10px] text-white/30 hover:text-red-400"
+                    onClick={(e) => { e.stopPropagation(); handleRemoveEntry(entry.id) }}
+                    title="移除"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          {entries.length > 0 && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleSaveAllRenamed}
+              className="mt-2 w-full rounded-md border border-white/25 px-3 py-1.5 text-xs transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              批量下载重命名模型（ZIP）
+            </button>
+          )}
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <label className="text-xs text-white/80">
@@ -567,7 +750,7 @@ export default function ItemCardTool() {
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              disabled={busy || !activePath}
+              disabled={busy || !activeEntry}
               onClick={handleDownloadCurrent}
               className="rounded-md bg-white px-3 py-2 text-xs font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -575,7 +758,7 @@ export default function ItemCardTool() {
             </button>
             <button
               type="button"
-              disabled={busy || modelPaths.length === 0}
+              disabled={busy || entries.length === 0}
               onClick={handleDownloadZip}
               className="rounded-md border border-white/35 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >

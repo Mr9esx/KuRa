@@ -1,0 +1,6 @@
+<svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M20 44L72 24L108 40L56 60L20 44Z" fill="currentColor" opacity="0.16"/>
+  <path d="M20 44L56 60V100L20 84V44Z" fill="currentColor" opacity="0.3"/>
+  <path d="M108 40L56 60V100L108 80V40Z" fill="currentColor" opacity="0.08"/>
+  <path d="M20 44L72 24L108 40L56 60L20 44ZM20 44V84L56 100L108 80V40M56 60V100" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

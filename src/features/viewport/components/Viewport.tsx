@@ -16,7 +16,6 @@ import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, Cir
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
-import { useTour } from "@/components/tour"
 import {
   NavigationMenu,
   NavigationMenuList,
@@ -30,6 +29,7 @@ import { BlockMesh } from "./BlockMesh"
 import { CellGrid } from "./CellGrid"
 import { PlacedItems } from "./PlacedItems"
 import { GhostPreview } from "./GhostPreview"
+import { TourGhostItem } from "./TourGhostItem"
 import { ViewCube, cameraTweenRef } from "./ViewCube"
 
 function clampDirectionPolar(dir: THREE.Vector3, minPolar: number, maxPolar: number): THREE.Vector3 {
@@ -206,7 +206,14 @@ function Scene({
       />
 
       {/* Ground reference */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -4.5, 0]}>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -4.5, 0]}
+        onClick={() => {
+          useEditorStore.getState().selectCatalogItem(null)
+          selectPlacement(null)
+        }}
+      >
         <planeGeometry args={[256, 256]} />
         <meshStandardMaterial color={isDark ? "#2a2a2a" : "#f0eeeb"} roughness={1} />
       </mesh>
@@ -242,11 +249,13 @@ function Scene({
           placements={placements}
         />
       )}
+
+      <TourGhostItem />
     </>
   )
 }
 
-function FpsTracker({ onUpdate }: { onUpdate: (fps: number) => void }) {
+function FpsTracker({ onUpdate }: { onUpdate: (fps: number, mem: number | null) => void }) {
   const frames = useRef(0)
   const lastTime = useRef(performance.now())
 
@@ -256,7 +265,9 @@ function FpsTracker({ onUpdate }: { onUpdate: (fps: number) => void }) {
     const elapsed = now - lastTime.current
     if (elapsed >= 1000) {
       const fps = Math.round((frames.current * 1000) / elapsed)
-      onUpdate(fps)
+      const perf = performance as Performance & { memory?: { usedJSHeapSize: number } }
+      const mem = perf.memory ? Math.round(perf.memory.usedJSHeapSize / 1048576) : null
+      onUpdate(fps, mem)
       frames.current = 0
       lastTime.current = now
     }
@@ -411,7 +422,6 @@ function useFullscreen() {
 }
 
 function MobileTopBar() {
-  const { isActive } = useTour()
   const { isFullscreen, toggle: toggleFullscreen, supported: fullscreenSupported } = useFullscreen()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
@@ -423,7 +433,6 @@ function MobileTopBar() {
               <button
                 id="tour-m-replay"
                 onClick={() => {
-                  if (isActive) return
                   window.dispatchEvent(new CustomEvent("kura-tour-replay"))
                 }}
                 className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
@@ -704,6 +713,7 @@ export function MobileActionBar() {
       <div className="mx-px h-3.5 w-px bg-border" />
 
       <button
+        id="tour-m-delete-btn"
         onClick={handleDelete}
         disabled={!selectedPlacementId}
         className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
@@ -712,6 +722,7 @@ export function MobileActionBar() {
         <Trash2 className="size-[18px]" />
       </button>
       <button
+        id="tour-m-clear-btn"
         onClick={handleClear}
         disabled={count === 0}
         className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
@@ -728,8 +739,8 @@ export function MobileActionBar() {
 
       <Dialog.Root open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+          <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
             <Dialog.Description className="mt-2 text-xs text-muted-foreground">
               确认删除选中的收纳件吗？
@@ -754,8 +765,8 @@ export function MobileActionBar() {
 
       <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+          <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
             <Dialog.Description className="mt-2 text-xs text-muted-foreground">
               确认清空当前布局吗？此操作不可撤销。
@@ -996,6 +1007,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       <div className="flex shrink-0 items-center gap-1">
         <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-1 py-1">
           <Button
+            id="tour-delete-btn"
             variant="ghost"
             size="xs"
             onClick={handleDelete}
@@ -1008,6 +1020,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
             删除
           </Button>
           <Button
+            id="tour-clear-btn"
             variant="ghost"
             size="xs"
             onClick={handleClear}
@@ -1028,8 +1041,8 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
 
       <Dialog.Root open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+          <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
             <Dialog.Description className="mt-2 text-xs text-muted-foreground">
               确认删除选中的收纳件吗？
@@ -1054,8 +1067,8 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
 
       <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
+          <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
             <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
             <Dialog.Description className="mt-2 text-xs text-muted-foreground">
               确认清空当前布局吗？此操作不可撤销。
@@ -1083,6 +1096,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
 
 export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
+  const [mem, setMem] = useState<number | null>(null)
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
   const setHoveredCell = useEditorStore((s) => s.setHoveredCell)
   const placeItemBySku = useEditorStore((s) => s.placeItemBySku)
@@ -1093,6 +1107,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     cameraRef.current = camera
     canvasRef.current = canvas
   }
+
+  const handlePointerMissed = useCallback(() => {
+    useEditorStore.getState().selectCatalogItem(null)
+    useEditorStore.getState().selectPlacement(null)
+  }, [])
 
   const resolveDropCell = useCallback((clientX: number, clientY: number): [number, number] | null => {
     const camera = cameraRef.current
@@ -1220,17 +1239,19 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       <Canvas
         camera={{ fov: cameraFov, position: cameraPosition, near: 1, far: 2000 }}
         gl={{ antialias: true }}
+        onPointerMissed={handlePointerMissed}
       >
         <Scene previewSku={draggingSku} dragging={!!draggingSku} mobile={mobile} />
         <SceneBridge onReady={bindSceneContext} />
-        <FpsTracker onUpdate={setFps} />
+        <FpsTracker onUpdate={(f, m) => { setFps(f); setMem(m) }} />
       </Canvas>
       <div className="pointer-events-none absolute inset-x-3 top-3">
         <ViewportToolbar mobile={mobile} />
       </div>
       <ViewportHUD />
       <div className="pointer-events-none absolute top-16 right-4 text-xs text-muted-foreground/25">
-        FPS: {fps ?? "--"}
+        <div>FPS: {fps ?? "--"}</div>
+        {mem !== null && <div>Mem: {mem} MB</div>}
       </div>
     </div>
   )

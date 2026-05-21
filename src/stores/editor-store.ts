@@ -24,6 +24,7 @@ interface EditorState {
   materialColorId: string
   blockColorId: string
   itemColorId: string
+  tourStepId: string | null
 }
 
 interface EditorActions {
@@ -40,6 +41,7 @@ interface EditorActions {
   setBlockColor: (id: string) => void
   setItemColor: (id: string) => void
   applyPreset: (preset: Preset) => void
+  setTourStepId: (id: string | null) => void
 }
 
 function getOccupiedCells(placements: Placement[]): Set<string> {
@@ -84,6 +86,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
     materialColorId: "ivory",
     blockColorId: "ivory",
     itemColorId: "ivory",
+    tourStepId: null,
 
     setBlock: (block) =>
       set((state) => {
@@ -97,11 +100,17 @@ export const useEditorStore = create<EditorState & EditorActions>()(
       set((state) => {
         state.selectedCatalogSku =
           state.selectedCatalogSku === sku ? null : sku
+        if (state.selectedCatalogSku) {
+          state.selectedPlacementId = null
+        }
       }),
 
     selectPlacement: (id) =>
       set((state) => {
         state.selectedPlacementId = id
+        if (id) {
+          state.selectedCatalogSku = null
+        }
       }),
 
     setHoveredCell: (cell) =>
@@ -200,5 +209,10 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         })
       })
     },
+
+    setTourStepId: (id) =>
+      set((state) => {
+        state.tourStepId = id
+      }),
   })),
 )

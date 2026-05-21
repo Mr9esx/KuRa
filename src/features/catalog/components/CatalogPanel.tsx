@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { useCatalog } from "@/hooks/use-catalog"
-import { useTour } from "@/components/tour"
 import { MobileActionBar } from "@/features/viewport"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -84,7 +83,6 @@ function ThemeToggleButton() {
 }
 
 function TourReplayButton() {
-  const { isActive } = useTour()
   return (
     <Tooltip>
       <TooltipTrigger
@@ -92,7 +90,6 @@ function TourReplayButton() {
           <button
             id="tour-replay"
             onClick={() => {
-              if (isActive) return
               window.dispatchEvent(new CustomEvent("kura-tour-replay"))
             }}
             className="rounded-md p-1 text-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -472,12 +469,13 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
               <div id="tour-m-catalog-items" className="no-scrollbar flex-1 overflow-x-auto overscroll-contain px-4 pb-4 pt-1">
                 <div className="flex h-full gap-2">
-                  {filteredItems.map((item) => (
+                  {filteredItems.map((item, itemIndex) => (
                     (() => {
                       const imageSrc = getItemImageSrc(item)
                       return (
                     <button
                       key={item.sku}
+                      id={itemIndex === 0 ? "tour-first-item" : undefined}
                       onClick={() => handleMobileItemClick(item.sku)}
                       onTouchStart={(e) => handleTouchStart(e, item.sku)}
                       onTouchMove={handleTouchMove}
@@ -739,19 +737,21 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
       {/* Grouped items */}
       <div id="tour-catalog-items" className="catalog-scroll no-scrollbar flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
-        {groups.map((group) => (
+        {groups.map((group, groupIdx) => (
           <div key={group.category} className="mt-3 first:mt-1">
             <div className="pb-1.5 text-[11px] font-medium text-muted-foreground">
               {group.category}
             </div>
             <div className={cn("grid gap-2", cols === 1 ? "grid-cols-1" : "grid-cols-2")}>
-              {group.items.map((item) => (
+              {group.items.map((item, itemIdx) => (
                 (() => {
                   const imageSrc = getItemImageSrc(item)
                   const [gridX, gridY] = getSafeGridSize(item)
+                  const isFirstItem = groupIdx === 0 && itemIdx === 0
                   return (
                 <button
                   key={item.sku}
+                  id={isFirstItem ? "tour-first-item" : undefined}
                   onClick={() => selectItem(item.sku)}
                   draggable
                   onDragStart={(e) => handleDragStart(e, item.sku)}
