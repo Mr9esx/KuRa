@@ -1,0 +1,27 @@
+---
+description: Enforce main-first then release merge workflow
+alwaysApply: true
+---
+
+# Git 发布流程（强制）
+
+## 核心规则
+
+- 禁止直接在 `release` 分支开发、提交功能改动。
+- 所有代码改动必须先在 `main` 分支完成提交并推送。
+- 仅在 `main` 推送成功后，才允许将 `main` 合并到 `release` 并推送。
+
+## 标准顺序
+
+1. `git switch main`
+2. 提交改动到 `main`
+3. `git push origin main`
+4. `git switch release`
+5. `git merge main`
+6. `git push origin release`
+
+## 执行要求
+
+- 在任何提交前，先检查当前分支并在回复中明确说明分支。
+- 若当前在 `release` 且有未提交改动，先转移到 `main`（例如 stash 后切换）再提交。
+- 如果用户要求“commit and push, merge to release”，默认按上述顺序执行，不得省略 `main` 步骤。
