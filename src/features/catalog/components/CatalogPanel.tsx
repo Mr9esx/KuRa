@@ -10,28 +10,8 @@ import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
 import { getCatalogItemDisplayName, type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
-import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
+import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
-
-function groupByCategory(items: CatalogItem[], activeCategory: string) {
-  const groups: { category: string; items: CatalogItem[] }[] = []
-  const groupMap = new Map<string, CatalogItem[]>()
-  for (const item of items) {
-    const targetCategories =
-      activeCategory === "全部" ? item.categories : [activeCategory]
-    for (const category of targetCategories) {
-      const existing = groupMap.get(category)
-      if (existing) {
-        existing.push(item)
-      } else {
-        const list = [item]
-        groupMap.set(category, list)
-        groups.push({ category, items: list })
-      }
-    }
-  }
-  return groups
-}
 
 const emptyDragImage = (() => {
   const canvas = document.createElement("canvas")
@@ -295,26 +275,38 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
   const filteredItems = useMemo(() => {
     if (!data) return []
-    return category === "全部"
-      ? allItems
-      : allItems.filter((item) => item.categories.includes(category))
+    if (category === "全部") return allItems
+    const skuSet = new Set(data.categoryIndex[category]?.itemAndRiserSkus ?? [])
+    return allItems.filter((item) => skuSet.has(item.sku))
   }, [category, data, allItems])
 
   const groups = useMemo(() => {
     if (!data) return []
-    return groupByCategory(filteredItems, category)
-  }, [category, data])
+    if (category !== "全部") {
+      return [{ category, items: filteredItems }]
+    }
+    const ordered = data.itemCategories.filter((cat) => cat !== "全部")
+    return ordered
+      .map((cat) => {
+        const skuSet = new Set(data.categoryIndex[cat]?.itemAndRiserSkus ?? [])
+        return {
+          category: cat,
+          items: allItems.filter((item) => skuSet.has(item.sku)),
+        }
+      })
+      .filter((group) => group.items.length > 0)
+  }, [allItems, category, data, filteredItems])
 
   const blockCategories = useMemo(() => {
     if (!data) return ["全部"]
-    return ["全部", ...new Set(data.blocks.flatMap((b) => b.categories))]
+    return data.blockCategories
   }, [data])
 
   const filteredBlocks = useMemo(() => {
     if (!data) return []
-    return blockCategory === "全部"
-      ? data.blocks
-      : data.blocks.filter((b) => b.categories.includes(blockCategory))
+    if (blockCategory === "全部") return data.blocks
+    const skuSet = new Set(data.categoryIndex[blockCategory]?.blockSkus ?? [])
+    return data.blocks.filter((b) => skuSet.has(b.sku))
   }, [blockCategory, data])
 
   useEffect(() => {
@@ -611,7 +603,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
             <AppLogo className="size-5" />
-            <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
+            <span className="text-lg font-semibold tracking-tight">{APP_PAGE_TITLE}</span>
           </div>
           <div className="flex items-center gap-0.5">
             <TourReplayButton />

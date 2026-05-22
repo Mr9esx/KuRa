@@ -1,9 +1,10 @@
-export const APP_NAME = "KuRa"
+export const APP_TAB_TITLE = "KuRa - 「仓」"
+export const APP_PAGE_TITLE = "KuRa"
 
 export const APP_SOCIAL = {
   xiaohongshu: {
-    label: `${APP_NAME} 小红书`,
-    account: `@${APP_NAME}官方账号`,
+    label: `${APP_PAGE_TITLE} 小红书`,
+    account: `@${APP_PAGE_TITLE}官方账号`,
   },
 } as const
 

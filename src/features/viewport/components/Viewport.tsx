@@ -1,21 +1,20 @@
-import { Suspense, useRef, useEffect, useCallback, useState, useMemo, type DragEvent } from "react"
+import { useRef, useEffect, useCallback, useState, useMemo, type DragEvent, type ChangeEvent } from "react"
 import * as THREE from "three"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import { Dialog } from "@base-ui/react/dialog"
-import JSZip from "jszip"
-import { saveAs } from "file-saver"
+import { toast } from "sonner"
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { getMaterialColor, MATERIAL_COLORS } from "@/config/materials"
 import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
-import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
+import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
 import { getCatalogItemDisplayName, type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp, Maximize, Minimize, AlertTriangle } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Download, Layers, CircleHelp, Maximize, Minimize, AlertTriangle } from "lucide-react"
 import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -39,6 +38,205 @@ import { ViewCube, cameraTweenRef } from "./ViewCube"
 function getItemNameBySku(sku: string): string {
   const item = findItemBySku(sku)
   return item ? getCatalogItemDisplayName(item) : sku
+}
+
+interface ShoppingListItem {
+  sku: string
+  name: string
+  qty: number
+}
+
+interface ImportedLayoutData {
+  blockSku: string
+  placements: Array<{ sku: string; cell: [number, number] }>
+}
+
+type ExportDeps = {
+  JSZip: new () => {
+    file: (name: string, data: string | ArrayBuffer | Blob) => unknown
+    generateAsync: (options: { type: "blob" }) => Promise<Blob>
+  }
+  saveAs: (typeof import("file-saver"))["saveAs"]
+  XLSX: typeof import("xlsx")
+}
+
+async function loadExportDeps(): Promise<ExportDeps> {
+  const [JSZipModule, { saveAs }, XLSX] = await Promise.all([
+    import("jszip"),
+    import("file-saver"),
+    import("xlsx"),
+  ])
+  const JSZip = JSZipModule.default as ExportDeps["JSZip"]
+  return { JSZip, saveAs, XLSX }
+}
+
+function buildShoppingList(placements: Placement[]): ShoppingListItem[] {
+  const counter = new Map<string, number>()
+  for (const p of placements) {
+    counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
+  }
+  return Array.from(counter.entries())
+    .map(([sku, qty]) => ({
+      sku,
+      name: getItemNameBySku(sku),
+      qty,
+    }))
+    .sort((a, b) => a.sku.localeCompare(b.sku))
+}
+
+function createModelPayload(block: BlockCatalogItem, placements: Placement[]) {
+  return {
+    type: "model",
+    exportedAt: new Date().toISOString(),
+    block,
+    placements,
+  }
+}
+
+async function appendModelAssetsToZip(
+  zip: { file: (name: string, data: string | ArrayBuffer | Blob) => unknown },
+  block: BlockCatalogItem,
+  placements: Placement[],
+) {
+  const paths = new Set<string>()
+  if (block.modelPath) paths.add(block.modelPath.replace(/^\//, ""))
+  for (const p of placements) {
+    const item = findItemBySku(p.sku)
+    if (item?.modelPath) paths.add(item.modelPath.replace(/^\//, ""))
+  }
+
+  const failed: string[] = []
+  await Promise.all(
+    Array.from(paths).map(async (path) => {
+      const url = `${import.meta.env.BASE_URL}${path}`
+      try {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.arrayBuffer()
+        zip.file(path, data)
+      } catch {
+        failed.push(path)
+      }
+    }),
+  )
+
+  if (failed.length > 0) {
+    zip.file(
+      "missing-model-files.txt",
+      [
+        "以下模型文件未能打包（请检查路径或资源是否存在）：",
+        ...failed.map((p) => `- ${p}`),
+      ].join("\n"),
+    )
+  }
+}
+
+function createShoppingWorkbook(
+  block: BlockCatalogItem,
+  placements: Placement[],
+  XLSX: typeof import("xlsx"),
+) {
+  const shoppingList = buildShoppingList(placements)
+  const metaRows = [
+    { 字段: "导出时间", 值: new Date().toISOString() },
+    { 字段: "框体 SKU", 值: block.sku },
+    { 字段: "框体名称", 值: block.name },
+    { 字段: "总放置数", 值: String(placements.length) },
+    { 字段: "SKU 种类数", 值: String(shoppingList.length) },
+  ]
+  const itemRows = shoppingList.map((item) => ({
+    SKU: item.sku,
+    名称: item.name,
+    数量: item.qty,
+  }))
+
+  const wb = XLSX.utils.book_new()
+  const summaryWs = XLSX.utils.json_to_sheet(metaRows)
+  const itemsWs = XLSX.utils.json_to_sheet(itemRows)
+  XLSX.utils.book_append_sheet(wb, summaryWs, "概要")
+  XLSX.utils.book_append_sheet(wb, itemsWs, "清单")
+  return wb
+}
+
+async function exportModel(block: BlockCatalogItem, placements: Placement[]) {
+  const { JSZip, saveAs } = await loadExportDeps()
+  const zip = new JSZip()
+  const modelPayload = createModelPayload(block, placements)
+  zip.file("layout.json", JSON.stringify(modelPayload, null, 2))
+  await appendModelAssetsToZip(zip, block, placements)
+  const modelBundle = await zip.generateAsync({ type: "blob" })
+  saveAs(modelBundle, `${EXPORT_PREFIX}-model-${Date.now()}.zip`)
+}
+
+async function exportShoppingXlsx(block: BlockCatalogItem, placements: Placement[]) {
+  const { XLSX, saveAs } = await loadExportDeps()
+  const wb = createShoppingWorkbook(block, placements, XLSX)
+  const xlsxBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+  const xlsxBlob = new Blob([xlsxBuffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  })
+  saveAs(xlsxBlob, `${EXPORT_PREFIX}-shopping-list-${Date.now()}.xlsx`)
+}
+
+async function exportAll(block: BlockCatalogItem, placements: Placement[]) {
+  const { JSZip, saveAs, XLSX } = await loadExportDeps()
+  const zip = new JSZip()
+  const modelPayload = createModelPayload(block, placements)
+  const wb = createShoppingWorkbook(block, placements, XLSX)
+  const xlsxBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+
+  zip.file("layout.json", JSON.stringify(modelPayload, null, 2))
+  await appendModelAssetsToZip(zip, block, placements)
+  zip.file("shopping-list.xlsx", xlsxBuffer)
+  const blob = await zip.generateAsync({ type: "blob" })
+  saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
+}
+
+function normalizeImportedLayout(raw: unknown): ImportedLayoutData {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("导入文件内容无效")
+  }
+  const data = raw as {
+    blockSku?: unknown
+    block?: { sku?: unknown }
+    placements?: unknown
+  }
+  const blockSku = (typeof data.blockSku === "string" ? data.blockSku : data.block?.sku) as
+    | string
+    | undefined
+  if (!blockSku) {
+    throw new Error("导入文件缺少 blockSku")
+  }
+
+  const rawPlacements = Array.isArray(data.placements) ? data.placements : []
+  const placements: Array<{ sku: string; cell: [number, number] }> = []
+  for (const entry of rawPlacements) {
+    if (!entry || typeof entry !== "object") continue
+    const sku = (entry as { sku?: unknown }).sku
+    const cell = (entry as { cell?: unknown }).cell
+    if (typeof sku !== "string" || !Array.isArray(cell) || cell.length < 2) continue
+    const col = Number(cell[0])
+    const row = Number(cell[1])
+    if (!Number.isFinite(col) || !Number.isFinite(row)) continue
+    placements.push({ sku, cell: [Math.trunc(col), Math.trunc(row)] })
+  }
+  return { blockSku, placements }
+}
+
+async function parseImportedLayoutFile(file: File): Promise<ImportedLayoutData> {
+  const lower = file.name.toLowerCase()
+  if (!lower.endsWith(".json")) {
+    throw new Error("仅支持导入 JSON 文件")
+  }
+
+  const text = await file.text()
+  return normalizeImportedLayout(JSON.parse(text))
+}
+
+function setPresetQueryParam(presetId: string) {
+  const url = new URL(window.location.href)
+  url.searchParams.set("set", presetId)
+  window.history.replaceState({}, "", url)
 }
 
 function clampDirectionPolar(dir: THREE.Vector3, minPolar: number, maxPolar: number): THREE.Vector3 {
@@ -233,20 +431,18 @@ function Scene({
         onCellHover={setHoveredCell}
         onCellClick={handleCellClick}
       />
-      <Suspense fallback={null}>
-        <PlacedItems
-          block={block}
-          placements={placements}
-          color={itemMat.hex}
-          roughness={itemMat.roughness}
-          mobile={mobile}
-          selectedPlacementId={selectedPlacementId}
-          draggingPlacementId={draggingPlacementId}
-          onSelectPlacement={selectPlacement}
-          onMovePlacement={movePlacement}
-          onDragPlacementChange={setDraggingPlacementId}
-        />
-      </Suspense>
+      <PlacedItems
+        block={block}
+        placements={placements}
+        color={itemMat.hex}
+        roughness={itemMat.roughness}
+        mobile={mobile}
+        selectedPlacementId={selectedPlacementId}
+        draggingPlacementId={draggingPlacementId}
+        onSelectPlacement={selectPlacement}
+        onMovePlacement={movePlacement}
+        onDragPlacementChange={setDraggingPlacementId}
+      />
 
       <ViewCube mobile={mobile} />
 
@@ -436,7 +632,7 @@ function MobileTopBar() {
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
       <div className="flex items-center gap-1">
         <AppLogo className="size-4" />
-        <span className="text-sm font-semibold tracking-tight">{APP_NAME}</span>
+        <span className="text-sm font-semibold tracking-tight">{APP_PAGE_TITLE}</span>
       </div>
       <div className="flex items-center gap-0.5">
         <Tooltip>
@@ -551,7 +747,9 @@ export function MobileActionBar() {
   const setItemColor = useEditorStore((s) => s.setItemColor)
   const clearAll = useEditorStore((s) => s.clearAll)
   const removePlacement = useEditorStore((s) => s.removePlacement)
+  const importLayout = useEditorStore((s) => s.importLayout)
   const count = placements.length
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const update = () => {
@@ -572,69 +770,10 @@ export function MobileActionBar() {
     setConfirmClearOpen(true)
   }
 
-  const exportModelMock = () => {
-    const payload = {
-      type: "model-mock",
-      exportedAt: new Date().toISOString(),
-      block,
-      placements,
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `${EXPORT_PREFIX}-model-mock-${Date.now()}.json`)
-  }
-
-  const exportShoppingList = () => {
-    const counter = new Map<string, number>()
-    for (const p of placements) {
-      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
-    }
-    const list = Array.from(counter.entries()).map(([sku, qty]) => ({
-      sku,
-      name: getItemNameBySku(sku),
-      qty,
-    }))
-    const payload = {
-      type: "shopping-list-mock",
-      exportedAt: new Date().toISOString(),
-      block: { sku: block.sku, name: block.name },
-      items: list,
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `${EXPORT_PREFIX}-shopping-list-${Date.now()}.json`)
-  }
-
-  const exportAllMock = async () => {
-    const zip = new JSZip()
-    const model = {
-      type: "model-mock",
-      exportedAt: new Date().toISOString(),
-      block,
-      placements,
-    }
-    const counter = new Map<string, number>()
-    for (const p of placements) {
-      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
-    }
-    const shopping = {
-      type: "shopping-list-mock",
-      exportedAt: new Date().toISOString(),
-      block: { sku: block.sku, name: block.name },
-      items: Array.from(counter.entries()).map(([sku, qty]) => ({
-        sku,
-        name: getItemNameBySku(sku),
-        qty,
-      })),
-    }
-    zip.file("model.mock.json", JSON.stringify(model, null, 2))
-    zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
-    const blob = await zip.generateAsync({ type: "blob" })
-    saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
-  }
-
-  const exportFnMap: Record<ExportType, () => void> = {
-    model: exportModelMock,
-    shopping: exportShoppingList,
-    all: exportAllMock,
+  const exportFnMap: Record<ExportType, () => void | Promise<void>> = {
+    model: () => exportModel(block, placements),
+    shopping: () => exportShoppingXlsx(block, placements),
+    all: () => exportAll(block, placements),
   }
 
   const openExportPreview = (type: ExportType) => {
@@ -655,6 +794,31 @@ export function MobileActionBar() {
     }
   }
 
+  const handleOpenImportPicker = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.currentTarget.value = ""
+    if (!file) return
+    try {
+      const layout = await parseImportedLayoutFile(file)
+      const result = importLayout(layout)
+      if (!result.ok) {
+        toast.error("导入失败：未找到匹配框体")
+        return
+      }
+      if (result.skipped > 0) {
+        toast.success(`导入完成：已放置 ${result.applied} 项，跳过 ${result.skipped} 项`)
+      } else {
+        toast.success(`导入完成：已放置 ${result.applied} 项`)
+      }
+    } catch (err) {
+      toast.error(`导入失败：${err instanceof Error ? err.message : "文件格式错误"}`)
+    }
+  }
+
   const iconTrigger =
     "inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground [&>svg+svg]:hidden"
 
@@ -664,7 +828,7 @@ export function MobileActionBar() {
         <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
             <NavigationMenuTrigger id="tour-m-materials" className={iconTrigger} aria-label="材质">
-              <Pipette className="size-[18px]" />
+              <Pipette className="size-4" strokeWidth={1.75} />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <div className="flex flex-col gap-2 p-2">
@@ -702,7 +866,7 @@ export function MobileActionBar() {
 
           <NavigationMenuItem>
             <NavigationMenuTrigger id="tour-m-export" className={iconTrigger} aria-label="导出">
-              <Upload className="size-[18px]" />
+              <Upload className="size-4" strokeWidth={1.75} />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <div className="flex min-w-[180px] flex-col gap-1 p-2">
@@ -710,22 +874,33 @@ export function MobileActionBar() {
                   onClick={() => openExportPreview("model")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  导出模型（Mock）
+                  导出模型（ZIP）
                 </button>
                 <button
                   onClick={() => openExportPreview("shopping")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  导出购物清单（Mock）
+                  导出购物清单（XLSX）
                 </button>
                 <button
                   onClick={() => openExportPreview("all")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  全部导出（Mock）
+                  全部导出（ZIP）
                 </button>
               </div>
             </NavigationMenuContent>
+          </NavigationMenuItem>
+          <NavigationMenuItem>
+            <NavigationMenuTrigger
+              id="tour-m-import"
+              onClick={handleOpenImportPicker}
+              className={iconTrigger}
+              aria-label="导入"
+              title="导入布局（JSON）"
+            >
+              <Download className="size-4" strokeWidth={1.75} />
+            </NavigationMenuTrigger>
           </NavigationMenuItem>
         </NavigationMenuList>
       </NavigationMenu>
@@ -740,7 +915,7 @@ export function MobileActionBar() {
         <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
             <NavigationMenuTrigger id="tour-m-presets" className={iconTrigger} aria-label="套装">
-              <Layers className="size-[18px]" />
+              <Layers className="size-4" strokeWidth={1.75} />
             </NavigationMenuTrigger>
             <NavigationMenuContent className="p-1">
               <PresetSelector
@@ -761,7 +936,7 @@ export function MobileActionBar() {
         className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
         aria-label="删除选中"
       >
-        <Trash2 className="size-[18px]" />
+        <Trash2 className="size-4" strokeWidth={1.75} />
       </button>
       <button
         id="tour-m-clear-btn"
@@ -770,7 +945,7 @@ export function MobileActionBar() {
         className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
         aria-label="清空"
       >
-        <Eraser className="size-[18px]" />
+        <Eraser className="size-4" strokeWidth={1.75} />
       </button>
 
       <PresetDialog
@@ -842,6 +1017,14 @@ export function MobileActionBar() {
           pendingExportRef.current = null
         }}
       />
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
     </div>
   )
 }
@@ -868,7 +1051,9 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   const setItemColor = useEditorStore((s) => s.setItemColor)
   const clearAll = useEditorStore((s) => s.clearAll)
   const removePlacement = useEditorStore((s) => s.removePlacement)
+  const importLayout = useEditorStore((s) => s.importLayout)
   const count = useEditorStore((s) => s.placements.length)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const viewportEl = toolbarRef.current?.closest<HTMLElement>("[id='tour-viewport']")
@@ -897,69 +1082,10 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     setConfirmClearOpen(true)
   }
 
-  const exportModelMock = () => {
-    const payload = {
-      type: "model-mock",
-      exportedAt: new Date().toISOString(),
-      block,
-      placements,
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `${EXPORT_PREFIX}-model-mock-${Date.now()}.json`)
-  }
-
-  const exportShoppingList = () => {
-    const counter = new Map<string, number>()
-    for (const p of placements) {
-      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
-    }
-    const list = Array.from(counter.entries()).map(([sku, qty]) => ({
-      sku,
-      name: getItemNameBySku(sku),
-      qty,
-    }))
-    const payload = {
-      type: "shopping-list-mock",
-      exportedAt: new Date().toISOString(),
-      block: { sku: block.sku, name: block.name },
-      items: list,
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-    saveAs(blob, `${EXPORT_PREFIX}-shopping-list-${Date.now()}.json`)
-  }
-
-  const exportAllMock = async () => {
-    const zip = new JSZip()
-    const model = {
-      type: "model-mock",
-      exportedAt: new Date().toISOString(),
-      block,
-      placements,
-    }
-    const counter = new Map<string, number>()
-    for (const p of placements) {
-      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
-    }
-    const shopping = {
-      type: "shopping-list-mock",
-      exportedAt: new Date().toISOString(),
-      block: { sku: block.sku, name: block.name },
-      items: Array.from(counter.entries()).map(([sku, qty]) => ({
-        sku,
-        name: getItemNameBySku(sku),
-        qty,
-      })),
-    }
-    zip.file("model.mock.json", JSON.stringify(model, null, 2))
-    zip.file("shopping-list.mock.json", JSON.stringify(shopping, null, 2))
-    const blob = await zip.generateAsync({ type: "blob" })
-    saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
-  }
-
-  const exportFnMap: Record<ExportType, () => void> = {
-    model: exportModelMock,
-    shopping: exportShoppingList,
-    all: exportAllMock,
+  const exportFnMap: Record<ExportType, () => void | Promise<void>> = {
+    model: () => exportModel(block, placements),
+    shopping: () => exportShoppingXlsx(block, placements),
+    all: () => exportAll(block, placements),
   }
 
   const openExportPreview = (type: ExportType) => {
@@ -977,6 +1103,31 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       pendingExportRef.current = exportFn
       setValidationProblems(result.problems)
       setValidationDialogOpen(true)
+    }
+  }
+
+  const handleOpenImportPicker = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.currentTarget.value = ""
+    if (!file) return
+    try {
+      const layout = await parseImportedLayoutFile(file)
+      const result = importLayout(layout)
+      if (!result.ok) {
+        toast.error("导入失败：未找到匹配框体")
+        return
+      }
+      if (result.skipped > 0) {
+        toast.success(`导入完成：已放置 ${result.applied} 项，跳过 ${result.skipped} 项`)
+      } else {
+        toast.success(`导入完成：已放置 ${result.applied} 项`)
+      }
+    } catch (err) {
+      toast.error(`导入失败：${err instanceof Error ? err.message : "文件格式错误"}`)
     }
   }
 
@@ -1034,22 +1185,33 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
                   onClick={() => openExportPreview("model")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  导出模型（Mock）
+                  导出模型（ZIP）
                 </button>
                 <button
                   onClick={() => openExportPreview("shopping")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  导出购物清单（Mock）
+                  导出购物清单（XLSX）
                 </button>
                 <button
                   onClick={() => openExportPreview("all")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  全部导出（Mock）
+                  全部导出（ZIP）
                 </button>
               </div>
             </NavigationMenuContent>
+          </NavigationMenuItem>
+          <NavigationMenuItem>
+            <NavigationMenuTrigger
+              id="tour-import"
+              onClick={handleOpenImportPicker}
+              className="h-8 px-2.5 text-xs"
+              aria-label="导入"
+              title="导入布局（JSON）"
+            >
+              导入
+            </NavigationMenuTrigger>
           </NavigationMenuItem>
         </NavigationMenuList>
       </NavigationMenu>
@@ -1089,29 +1251,29 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-1 py-1">
+        <div className="flex items-center gap-1.5">
           <Button
             id="tour-delete-btn"
             variant="ghost"
-            size="xs"
+            size="default"
             onClick={handleDelete}
             disabled={!selectedPlacementId}
-            className="px-2 text-xs text-foreground hover:bg-accent hover:text-foreground data-[disabled]:text-muted-foreground"
+            className="h-8 px-2.5 text-xs text-foreground hover:bg-accent hover:text-foreground data-[disabled]:text-muted-foreground"
             title="删除选中"
             aria-label="删除选中"
           >
-            <Trash2 className="size-3" />
+            <Trash2 className="size-4" strokeWidth={1.75} />
             删除
           </Button>
           <Button
             id="tour-clear-btn"
             variant="ghost"
-            size="xs"
+            size="default"
             onClick={handleClear}
             disabled={count === 0}
-            className="px-2 text-xs text-foreground hover:bg-accent hover:text-foreground data-[disabled]:text-muted-foreground"
+            className="h-8 px-2.5 text-xs text-foreground hover:bg-accent hover:text-foreground data-[disabled]:text-muted-foreground"
           >
-            <Eraser className="size-3" />
+            <Eraser className="size-4" strokeWidth={1.75} />
             清空
           </Button>
         </div>
@@ -1186,6 +1348,14 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
           pendingExportRef.current = null
         }}
       />
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
     </div>
   )
 }
@@ -1194,10 +1364,13 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
   const [mem, setMem] = useState<number | null>(null)
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
+  const { data: catalogData } = useCatalog()
+  const applyPreset = useEditorStore((s) => s.applyPreset)
   const setHoveredCell = useEditorStore((s) => s.setHoveredCell)
   const placeItemBySku = useEditorStore((s) => s.placeItemBySku)
   const cameraRef = useRef<THREE.Camera | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const presetAppliedByQueryRef = useRef(false)
 
   const bindSceneContext = (camera: THREE.Camera, canvas: HTMLCanvasElement) => {
     cameraRef.current = camera
@@ -1292,6 +1465,30 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     }
   }, [resolveDropCell, setHoveredCell, placeItemBySku])
 
+  useEffect(() => {
+    if (presetAppliedByQueryRef.current) return
+    if (!catalogData) return
+    presetAppliedByQueryRef.current = true
+
+    const setParam = new URLSearchParams(window.location.search).get("set")
+    if (!setParam) return
+
+    const byId = catalogData.presets.find((p) => p.id === setParam)
+    const index = Number(setParam)
+    const byIndex = Number.isInteger(index) && index > 0
+      ? catalogData.presets[index - 1]
+      : undefined
+    const target = byId ?? byIndex
+
+    if (!target) {
+      toast.error(`未找到套装：${setParam}`)
+      return
+    }
+    applyPreset(target)
+    setPresetQueryParam(target.id)
+    toast.success(`已加载套装：${target.name}`)
+  }, [applyPreset, catalogData])
+
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "copy"
@@ -1333,8 +1530,8 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       onDragLeave={() => setHoveredCell(null)}
     >
       <Canvas
-        camera={{ fov: cameraFov, position: cameraPosition, near: 1, far: 2000 }}
-        gl={{ antialias: true }}
+        camera={{ fov: cameraFov, position: cameraPosition, near: 10, far: 1200 }}
+        gl={{ antialias: true, logarithmicDepthBuffer: true }}
         onCreated={({ gl }) => {
           gl.localClippingEnabled = true
         }}
@@ -1462,9 +1659,9 @@ function ValidationWarningDialog({
 type ExportType = "model" | "shopping" | "all"
 
 const EXPORT_LABELS: Record<ExportType, string> = {
-  model: "导出模型（Mock）",
-  shopping: "导出购物清单（Mock）",
-  all: "全部导出（Mock）",
+  model: "导出模型（ZIP）",
+  shopping: "导出购物清单（XLSX）",
+  all: "全部导出（ZIP）",
 }
 
 function ExportPreviewDialog({

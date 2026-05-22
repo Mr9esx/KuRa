@@ -49,6 +49,10 @@ interface EditorActions {
   setBlockColor: (id: string) => void
   setItemColor: (id: string) => void
   applyPreset: (preset: Preset) => void
+  importLayout: (layout: {
+    blockSku: string
+    placements: Array<{ sku: string; cell: [number, number] }>
+  }) => { ok: boolean; applied: number; skipped: number; reason?: string }
   setTourStepId: (id: string | null) => void
   setProblemPlacementIds: (ids: string[]) => void
 }
@@ -261,6 +265,49 @@ export const useEditorStore = create<EditorState & EditorActions>()(
           }
         })
       })
+    },
+
+    importLayout: (layout) => {
+      const block = findBlockBySku(layout.blockSku)
+      if (!block) {
+        return { ok: false, applied: 0, skipped: layout.placements.length, reason: "block-not-found" }
+      }
+
+      const nextPlacements: Placement[] = []
+      let skipped = 0
+
+      for (const p of layout.placements) {
+        const item = findItemBySku(p.sku)
+        if (!item) {
+          skipped++
+          continue
+        }
+        const placingType = item.type === "riser" ? "riser" : "item"
+        if (!canPlace(p.cell[0], p.cell[1], item.gridSize, block, nextPlacements, placingType)) {
+          skipped++
+          continue
+        }
+        nextPlacements.push({
+          id: crypto.randomUUID(),
+          sku: item.sku,
+          cell: p.cell,
+          gridSize: item.gridSize,
+          height: item.height,
+          risers: [],
+        })
+      }
+
+      set((state) => {
+        state.block = block
+        state.selectedCatalogSku = null
+        state.selectedPlacementId = null
+        state.hoveredCell = null
+        state.placementDragActive = false
+        state.problemPlacementIds = []
+        state.placements = nextPlacements
+      })
+
+      return { ok: true, applied: nextPlacements.length, skipped }
     },
 
     setTourStepId: (id) =>

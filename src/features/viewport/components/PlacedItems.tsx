@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { Suspense, useEffect, useMemo } from "react"
 import * as THREE from "three"
 import type { ThreeEvent } from "@react-three/fiber"
 import { useLoader } from "@react-three/fiber"
@@ -42,7 +42,6 @@ interface PlacedModelProps {
   yOffset: number
   color: string
   roughness: number
-  clippingPlanes: THREE.Plane[]
   selected: boolean
   problem: boolean
   events: PlacementEventHandlers
@@ -60,7 +59,6 @@ function PlacedModel({
   yOffset,
   color,
   roughness,
-  clippingPlanes,
   selected,
   problem,
   events,
@@ -89,12 +87,15 @@ function PlacedModel({
         color,
         roughness,
         metalness: 0,
-        clippingPlanes,
-        clipShadows: true,
+        transparent: false,
+        opacity: 1,
+        depthTest: true,
+        depthWrite: true,
+        side: THREE.FrontSide,
         emissive: selected ? "#7aa2ff" : problem ? "#ffaa00" : "#000000",
         emissiveIntensity: selected ? 0.35 : problem ? 0.5 : 0,
       }),
-    [color, roughness, clippingPlanes, selected, problem],
+    [color, roughness, selected, problem],
   )
   const { center, minY, size } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model)
@@ -297,20 +298,21 @@ export function PlacedItems({
                   roughness={roughness}
                 />
               )}
-              <PlacedModel
-                modelPath={catalogItem.modelPath}
-                modelRotation={catalogItem.modelRotation}
-                placement={p}
-                worldX={wx}
-                worldZ={wz}
-                yOffset={yBase}
-                color={color}
-                roughness={roughness}
-                clippingPlanes={clippingPlanes}
-                selected={selected}
-                problem={isProblem}
-                events={events}
-              />
+              <Suspense fallback={null}>
+                <PlacedModel
+                  modelPath={catalogItem.modelPath}
+                  modelRotation={catalogItem.modelRotation}
+                  placement={p}
+                  worldX={wx}
+                  worldZ={wz}
+                  yOffset={yBase}
+                  color={color}
+                  roughness={roughness}
+                  selected={selected}
+                  problem={isProblem}
+                  events={events}
+                />
+              </Suspense>
             </group>
           )
         }
@@ -340,8 +342,11 @@ export function PlacedItems({
                 color={color}
                 roughness={roughness}
                 metalness={0}
-                clippingPlanes={clippingPlanes}
-                clipShadows
+                transparent={false}
+                opacity={1}
+                depthTest
+                depthWrite
+                side={THREE.FrontSide}
                 emissive={selected ? "#7aa2ff" : isProblem ? "#ffaa00" : "#000000"}
                 emissiveIntensity={selected ? 0.35 : isProblem ? 0.5 : 0}
               />

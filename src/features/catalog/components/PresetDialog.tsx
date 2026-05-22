@@ -30,6 +30,9 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
 
   const handleApply = () => {
     applyPreset(preset)
+    const url = new URL(window.location.href)
+    url.searchParams.set("set", preset.id)
+    window.history.replaceState({}, "", url)
     onOpenChange(false)
   }
 

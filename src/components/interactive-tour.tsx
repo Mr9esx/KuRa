@@ -5,7 +5,7 @@ import { useEditorStore } from "@/stores/editor-store"
 import { useLayoutMode } from "@/hooks/use-layout-mode"
 import { useCatalog } from "@/hooks/use-catalog"
 import { AppLogo } from "@/components/brand/app-logo"
-import { STORAGE_KEYS, CUSTOM_EVENTS, APP_NAME } from "@/config/brand"
+import { STORAGE_KEYS, CUSTOM_EVENTS, APP_PAGE_TITLE } from "@/config/brand"
 
 const STORAGE_KEY = STORAGE_KEYS.tourCompleted
 
@@ -326,7 +326,7 @@ function WelcomeDialog({
           >
             <AppLogo className="size-12" />
           </motion.div>
-          <h2 className="mt-3 text-lg font-semibold">欢迎使用 {APP_NAME}</h2>
+          <h2 className="mt-3 text-lg font-semibold">欢迎使用 {APP_PAGE_TITLE}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             跟着引导一起操作，3 步快速上手收纳布局。
           </p>

@@ -1,21 +1,23 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "@/styles/globals.css"
-import { APP_NAME } from "@/config/brand"
-import App from "./App"
-import ItemCardTool from "@/tools/item-card-tool"
+import { APP_TAB_TITLE } from "@/config/brand"
 
-document.title = APP_NAME
+document.title = APP_TAB_TITLE
 
-function getEntryElement() {
+async function resolveEntry() {
   if (window.location.pathname === "/tools/item-card") {
-    return <ItemCardTool />
+    const { default: ItemCardTool } = await import("@/tools/item-card-tool")
+    return ItemCardTool
   }
-  return <App />
+  const { default: App } = await import("./App")
+  return App
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    {getEntryElement()}
-  </StrictMode>,
-)
+void resolveEntry().then((Entry) => {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <Entry />
+    </StrictMode>,
+  )
+})
