@@ -42,10 +42,14 @@ interface PlacedModelProps {
   yOffset: number
   color: string
   roughness: number
+  clippingPlanes: THREE.Plane[]
   selected: boolean
   problem: boolean
   events: PlacementEventHandlers
 }
+
+const BLOCK_WALL_CLEARANCE = 0
+const BLOCK_FLOOR_THICKNESS = 4
 
 function PlacedModel({
   modelPath,
@@ -56,6 +60,7 @@ function PlacedModel({
   yOffset,
   color,
   roughness,
+  clippingPlanes,
   selected,
   problem,
   events,
@@ -84,10 +89,12 @@ function PlacedModel({
         color,
         roughness,
         metalness: 0,
+        clippingPlanes,
+        clipShadows: true,
         emissive: selected ? "#7aa2ff" : problem ? "#ffaa00" : "#000000",
         emissiveIntensity: selected ? 0.35 : problem ? 0.5 : 0,
       }),
-    [color, roughness, selected, problem],
+    [color, roughness, clippingPlanes, selected, problem],
   )
   const { center, minY, size } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model)
@@ -99,8 +106,8 @@ function PlacedModel({
   }, [model])
 
   const scale = useMemo<[number, number, number]>(() => {
-    const targetW = placement.gridSize[0] * CELL_SIZE - 1.5
-    const targetD = placement.gridSize[1] * CELL_SIZE - 1.5
+    const targetW = placement.gridSize[0] * CELL_SIZE
+    const targetD = placement.gridSize[1] * CELL_SIZE
     const targetH = placement.height
     const sx = size.x > 0 ? targetW / size.x : 1
     const sy = size.y > 0 ? targetH / size.y : 1
@@ -159,6 +166,18 @@ export function PlacedItems({
   const selectedCatalogSku = useEditorStore((s) => s.selectedCatalogSku)
   const [innerW, innerD] = block.innerSize
   const [cols, rows] = block.cellGrid
+  const clippingPlanes = useMemo(() => {
+    const minX = -innerW / 2 + BLOCK_WALL_CLEARANCE
+    const maxX = innerW / 2 - BLOCK_WALL_CLEARANCE
+    const minZ = -innerD / 2 + BLOCK_WALL_CLEARANCE
+    const maxZ = innerD / 2 - BLOCK_WALL_CLEARANCE
+    return [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), -minX),
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), maxX),
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), -minZ),
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), maxZ),
+    ]
+  }, [innerW, innerD])
 
   const toCellFromRay = (ray: THREE.Ray): [number, number] | null => {
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2)
@@ -175,7 +194,7 @@ export function PlacedItems({
     <group>
       {placements.map((p) => {
         const catalogItem = findItemBySku(p.sku)
-        const [wx, wz] = cellToWorld(
+        const [rawWx, rawWz] = cellToWorld(
           p.cell[0],
           p.cell[1],
           innerW,
@@ -183,8 +202,14 @@ export function PlacedItems({
           p.gridSize[0],
           p.gridSize[1],
         )
-        const w = p.gridSize[0] * CELL_SIZE - 1.5
-        const d = p.gridSize[1] * CELL_SIZE - 1.5
+        const w = p.gridSize[0] * CELL_SIZE
+        const d = p.gridSize[1] * CELL_SIZE
+        const minX = -innerW / 2 + w / 2 + BLOCK_WALL_CLEARANCE
+        const maxX = innerW / 2 - w / 2 - BLOCK_WALL_CLEARANCE
+        const minZ = -innerD / 2 + d / 2 + BLOCK_WALL_CLEARANCE
+        const maxZ = innerD / 2 - d / 2 - BLOCK_WALL_CLEARANCE
+        const wx = minX <= maxX ? THREE.MathUtils.clamp(rawWx, minX, maxX) : rawWx
+        const wz = minZ <= maxZ ? THREE.MathUtils.clamp(rawWz, minZ, maxZ) : rawWz
         const selected = selectedPlacementId === p.id
         const isProblem = problemPlacementIds.includes(p.id)
         const dragging = draggingPlacementId === p.id
@@ -257,7 +282,7 @@ export function PlacedItems({
         const standaloneRiserHeight = isRiser
           ? 0
           : getRiserHeightAtCell(p.cell[0], p.cell[1], placements)
-        const yBase = embeddedRiserHeight + standaloneRiserHeight
+        const yBase = BLOCK_FLOOR_THICKNESS + embeddedRiserHeight + standaloneRiserHeight
 
         if (catalogItem?.modelPath) {
           return (
@@ -267,6 +292,7 @@ export function PlacedItems({
                   placement={p}
                   worldX={wx}
                   worldZ={wz}
+                  baseY={BLOCK_FLOOR_THICKNESS}
                   color={color}
                   roughness={roughness}
                 />
@@ -280,6 +306,7 @@ export function PlacedItems({
                 yOffset={yBase}
                 color={color}
                 roughness={roughness}
+                clippingPlanes={clippingPlanes}
                 selected={selected}
                 problem={isProblem}
                 events={events}
@@ -295,6 +322,7 @@ export function PlacedItems({
                 placement={p}
                 worldX={wx}
                 worldZ={wz}
+                baseY={BLOCK_FLOOR_THICKNESS}
                 color={color}
                 roughness={roughness}
               />
@@ -312,6 +340,8 @@ export function PlacedItems({
                 color={color}
                 roughness={roughness}
                 metalness={0}
+                clippingPlanes={clippingPlanes}
+                clipShadows
                 emissive={selected ? "#7aa2ff" : isProblem ? "#ffaa00" : "#000000"}
                 emissiveIntensity={selected ? 0.35 : isProblem ? 0.5 : 0}
               />

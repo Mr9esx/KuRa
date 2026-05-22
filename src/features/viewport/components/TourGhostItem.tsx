@@ -6,6 +6,8 @@ import { findItemBySku } from "@/hooks/use-catalog"
 import { cellToWorld } from "@/lib/coordinates"
 import { CELL_SIZE } from "@/config/catalog"
 
+const BLOCK_FLOOR_THICKNESS = 4
+
 function PulsingBox({
   position,
   args,
@@ -49,12 +51,12 @@ function PlaceItemGhost() {
   const col = Math.floor((bCols - item.gridSize[0]) / 2)
   const row = Math.floor((bRows - item.gridSize[1]) / 2)
   const [wx, wz] = cellToWorld(col, row, innerW, innerD, item.gridSize[0], item.gridSize[1])
-  const w = item.gridSize[0] * CELL_SIZE - 1.5
-  const d = item.gridSize[1] * CELL_SIZE - 1.5
+  const w = item.gridSize[0] * CELL_SIZE
+  const d = item.gridSize[1] * CELL_SIZE
 
   return (
     <PulsingBox
-      position={[wx, item.height / 2, wz]}
+      position={[wx, BLOCK_FLOOR_THICKNESS + item.height / 2, wz]}
       args={[w, item.height, d]}
       color="#3b82f6"
     />
@@ -83,7 +85,7 @@ function SelectPlacedGhost() {
 
   return (
     <PulsingBox
-      position={[wx, h / 2, wz]}
+      position={[wx, BLOCK_FLOOR_THICKNESS + h / 2, wz]}
       args={[w, h, d]}
       color="#22c55e"
     />
@@ -117,8 +119,8 @@ function MovePlacedGhost() {
 
     const [wx, wz] = cellToWorld(targetCol, targetRow, innerW, innerD, gw, gd)
     snapshotRef.current = {
-      pos: [wx, placement.height / 2, wz],
-      size: [gw * CELL_SIZE - 1.5, placement.height, gd * CELL_SIZE - 1.5],
+      pos: [wx, BLOCK_FLOOR_THICKNESS + placement.height / 2, wz],
+      size: [gw * CELL_SIZE, placement.height, gd * CELL_SIZE],
     }
   }
 

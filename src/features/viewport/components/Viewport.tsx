@@ -1335,6 +1335,9 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       <Canvas
         camera={{ fov: cameraFov, position: cameraPosition, near: 1, far: 2000 }}
         gl={{ antialias: true }}
+        onCreated={({ gl }) => {
+          gl.localClippingEnabled = true
+        }}
         onPointerMissed={handlePointerMissed}
       >
         <Scene previewSku={draggingSku} dragging={!!draggingSku} mobile={mobile} />

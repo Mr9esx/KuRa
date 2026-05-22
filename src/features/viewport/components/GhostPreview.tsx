@@ -11,6 +11,8 @@ interface GhostPreviewProps {
   placements: Placement[]
 }
 
+const BLOCK_FLOOR_THICKNESS = 4
+
 export function GhostPreview({
   block,
   cell,
@@ -33,11 +35,11 @@ export function GhostPreview({
     item.gridSize[0],
     item.gridSize[1],
   )
-  const w = item.gridSize[0] * CELL_SIZE - 1.5
-  const d = item.gridSize[1] * CELL_SIZE - 1.5
+  const w = item.gridSize[0] * CELL_SIZE
+  const d = item.gridSize[1] * CELL_SIZE
 
   return (
-    <mesh position={[wx, riserY + item.height / 2, wz]}>
+    <mesh position={[wx, BLOCK_FLOOR_THICKNESS + riserY + item.height / 2, wz]}>
       <boxGeometry args={[w, item.height, d]} />
       <meshStandardMaterial
         color={valid ? "#22c55e" : "#ef4444"}

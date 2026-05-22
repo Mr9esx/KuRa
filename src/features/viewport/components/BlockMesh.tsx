@@ -1,11 +1,10 @@
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import * as THREE from "three"
+import { useLoader } from "@react-three/fiber"
+import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
 import type { BlockCatalogItem } from "@/types/catalog"
 
 const WALL_T = 4
-const FLOOR_T = 4
-const FRONT_H = 12
-const BACK_H = 72
 
 interface BlockMeshProps {
   block: BlockCatalogItem
@@ -14,66 +13,83 @@ interface BlockMeshProps {
 }
 
 export function BlockMesh({ block, color, roughness }: BlockMeshProps) {
+  const modelUrl = useMemo(() => {
+    const base = import.meta.env.BASE_URL
+    return `${base}${block.modelPath.replace(/^\//, "")}`
+  }, [block.modelPath])
+  const loaded = useLoader(ThreeMFLoader, modelUrl)
   const [innerW, innerD] = block.innerSize
   const outerW = innerW + WALL_T * 2
   const outerD = innerD + WALL_T * 2
+  const targetH = block.height
 
-  const { leftWallGeo, rightWallGeo } = useMemo(() => {
-    const shape = new THREE.Shape()
-    shape.moveTo(0, -FLOOR_T)
-    shape.lineTo(outerD, -FLOOR_T)
-    shape.lineTo(outerD, FRONT_H - FLOOR_T)
-    shape.lineTo(0, BACK_H - FLOOR_T)
-    shape.closePath()
+  const rotation = useMemo<[number, number, number]>(() => {
+    const [rx, ry, rz] = block.modelRotation ?? [0, 0, 0]
+    return [
+      THREE.MathUtils.degToRad(rx),
+      THREE.MathUtils.degToRad(ry),
+      THREE.MathUtils.degToRad(rz),
+    ]
+  }, [block.modelRotation])
 
-    const opts: THREE.ExtrudeGeometryOptions = {
-      depth: WALL_T,
-      bevelEnabled: false,
-    }
+  const model = useMemo(() => {
+    const cloned = loaded.clone(true)
+    cloned.rotation.set(rotation[0], rotation[1], rotation[2])
+    return cloned
+  }, [loaded, rotation])
 
-    const left = new THREE.ExtrudeGeometry(shape, opts)
-    left.rotateY(-Math.PI / 2)
-    left.translate(-innerW / 2, 0, -outerD / 2)
-
-    const right = new THREE.ExtrudeGeometry(shape, opts)
-    right.rotateY(-Math.PI / 2)
-    right.translate(innerW / 2 + WALL_T, 0, -outerD / 2)
-
-    return { leftWallGeo: left, rightWallGeo: right }
-  }, [innerW, innerD, outerD])
-
-  const mat = useMemo(
+  const material = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 }),
+      new THREE.MeshStandardMaterial({
+        color,
+        roughness,
+        metalness: 0,
+      }),
     [color, roughness],
   )
 
+  const { center, minY, size } = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(model)
+    const s = new THREE.Vector3()
+    box.getSize(s)
+    const hookDepth = Math.max(0, block.modelBackHookDepth ?? 0)
+    const effectiveMinZ = box.min.z + hookDepth
+    const effectiveMaxZ = box.max.z
+    const effectiveDepth = Math.max(1e-6, effectiveMaxZ - effectiveMinZ)
+    const effectiveCenterZ = (effectiveMinZ + effectiveMaxZ) * 0.5
+    const c = new THREE.Vector3(
+      (box.min.x + box.max.x) * 0.5,
+      (box.min.y + box.max.y) * 0.5,
+      effectiveCenterZ,
+    )
+    return { center: c, minY: box.min.y, size: new THREE.Vector3(s.x, s.y, effectiveDepth) }
+  }, [model, block.modelBackHookDepth])
+
+  const scale = useMemo<[number, number, number]>(() => {
+    const sx = size.x > 0 ? outerW / size.x : Infinity
+    const sy = size.y > 0 ? targetH / size.y : Infinity
+    const sz = size.z > 0 ? outerD / size.z : Infinity
+    return [
+      Number.isFinite(sx) && sx > 0 ? sx : 1,
+      Number.isFinite(sy) && sy > 0 ? sy : 1,
+      Number.isFinite(sz) && sz > 0 ? sz : 1,
+    ]
+  }, [outerW, targetH, outerD, size.x, size.y, size.z])
+
+  useEffect(() => {
+    model.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return
+      obj.material = material
+      obj.castShadow = true
+      obj.receiveShadow = true
+    })
+  }, [material, model])
+
+  useEffect(() => () => material.dispose(), [material])
+
   return (
-    <group>
-      {/* Floor */}
-      <mesh position={[0, -FLOOR_T / 2, 0]} material={mat}>
-        <boxGeometry args={[outerW, FLOOR_T, outerD]} />
-      </mesh>
-
-      {/* Back wall (tall, negative Z) */}
-      <mesh
-        position={[0, (BACK_H - FLOOR_T) / 2, -(innerD / 2 + WALL_T / 2)]}
-        material={mat}
-      >
-        <boxGeometry args={[outerW, BACK_H - FLOOR_T, WALL_T]} />
-      </mesh>
-
-      {/* Front wall (short, positive Z, facing camera) */}
-      <mesh
-        position={[0, (FRONT_H - FLOOR_T) / 2, innerD / 2 + WALL_T / 2]}
-        material={mat}
-      >
-        <boxGeometry args={[outerW, FRONT_H - FLOOR_T, WALL_T]} />
-      </mesh>
-
-      {/* Side walls */}
-      <mesh geometry={leftWallGeo} material={mat} />
-      <mesh geometry={rightWallGeo} material={mat} />
+    <group scale={scale}>
+      <primitive object={model} position={[-center.x, -minY, -center.z]} />
     </group>
   )
 }

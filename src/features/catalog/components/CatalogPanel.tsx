@@ -46,6 +46,11 @@ function getItemImageSrc(item: CatalogItem): string | null {
   return `${base}${item.imagePath.replace(/^\//, "")}`
 }
 
+function getBlockImageSrc(block: BlockCatalogItem): string {
+  const base = import.meta.env.BASE_URL
+  return `${base}${block.imagePath.replace(/^\//, "")}`
+}
+
 function getSafeGridSize(item: CatalogItem): [number, number] {
   const x = Number(item.gridSize?.[0])
   const y = Number(item.gridSize?.[1])
@@ -554,6 +559,9 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
               <div className="no-scrollbar overflow-x-auto overscroll-contain px-0.5 py-1">
                 <div className="flex gap-2">
                   {filteredBlocks.map((b) => (
+                    (() => {
+                      const imageSrc = getBlockImageSrc(b)
+                      return (
                     <button
                       key={b.sku}
                       onClick={() => handleBlockSelect(b)}
@@ -565,17 +573,11 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       )}
                     >
                       <div className="mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
-                        <div
-                          className={cn(
-                            "rounded-sm transition-colors",
-                            block.sku === b.sku
-                              ? "bg-foreground"
-                              : "bg-foreground/20 group-hover:bg-foreground/30",
-                          )}
-                          style={{
-                            width: `${Math.min(b.cellGrid[0] * 18, 40)}px`,
-                            height: `${Math.min(b.cellGrid[1] * 18, 40)}px`,
-                          }}
+                        <img
+                          src={imageSrc}
+                          alt={b.name}
+                          className="h-full w-full rounded-md object-contain"
+                          loading="lazy"
                         />
                       </div>
                       <div className="text-[11px] font-medium leading-tight">{b.name}</div>
@@ -583,6 +585,8 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         {b.cellGrid[0]}×{b.cellGrid[1]}
                       </div>
                     </button>
+                      )
+                    })()
                   ))}
                 </div>
               </div>
@@ -668,6 +672,9 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
             >
             <div className="flex gap-2">
               {filteredBlocks.map((b) => (
+                (() => {
+                  const imageSrc = getBlockImageSrc(b)
+                  return (
                 <button
                   key={b.sku}
                   onClick={() => handleBlockSelect(b)}
@@ -679,17 +686,11 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   )}
                 >
                   <div className="mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
-                    <div
-                      className={cn(
-                        "rounded-sm transition-colors",
-                        block.sku === b.sku
-                          ? "bg-foreground"
-                          : "bg-foreground/20 group-hover:bg-foreground/30",
-                      )}
-                      style={{
-                        width: `${Math.min(b.cellGrid[0] * 10, 52)}px`,
-                        height: `${Math.min(b.cellGrid[1] * 10, 52)}px`,
-                      }}
+                    <img
+                      src={imageSrc}
+                      alt={b.name}
+                      className="h-full w-full rounded-md object-contain"
+                      loading="lazy"
                     />
                   </div>
                   <div className="line-clamp-1 text-[11px] font-medium leading-tight">{b.name}</div>
@@ -697,6 +698,8 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                     {b.cellGrid[0]}×{b.cellGrid[1]} · {b.innerSize[0]}×{b.innerSize[1]}mm
                   </div>
                 </button>
+                  )
+                })()
               ))}
             </div>
             </div>

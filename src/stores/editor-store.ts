@@ -6,13 +6,18 @@ import { findBlockBySku, findItemBySku } from "@/hooks/use-catalog"
 
 const FALLBACK_BLOCK: BlockCatalogItem = {
   sku: "41001",
-  name: "标准主框体",
+  sku_name: "B-6x4-SHELL-框体",
+  display_name: "B-6x4-SHELL-框体",
+  name: "B-6x4-SHELL-框体",
   type: "block",
   categories: ["基础框体"],
   gridSize: [6, 4],
   height: 72,
   innerSize: [240, 160],
   cellGrid: [6, 4],
+  imagePath: "images/block/B-6x4-SHELL-框体.png",
+  modelPath: "models/blocks/B-6x4-SHELL-框体.3mf",
+  modelRotation: [90, 180, 0],
 }
 
 interface EditorState {

@@ -21,6 +21,13 @@ export interface BlockCatalogItem extends CatalogItem {
   type: "block"
   innerSize: [number, number] // [width, depth] mm
   cellGrid: [number, number] // [cols, rows]
+  modelPath: string
+  imagePath: string
+  /**
+   * Extra back protrusion on the model (e.g. wall hook), in mm.
+   * This part is excluded when fitting model depth to logical block depth.
+   */
+  modelBackHookDepth?: number
 }
 
 export interface PresetPlacement {

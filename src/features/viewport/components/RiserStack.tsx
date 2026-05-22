@@ -12,6 +12,7 @@ interface RiserStackProps {
   placement: Placement
   worldX: number
   worldZ: number
+  baseY: number
   color: string
   roughness: number
 }
@@ -57,8 +58,8 @@ function RiserPieceModel({
     [color],
   )
 
-  const pieceW = piece.gridSize[0] * CELL_SIZE - 1.5
-  const pieceD = piece.gridSize[1] * CELL_SIZE - 1.5
+  const pieceW = piece.gridSize[0] * CELL_SIZE
+  const pieceD = piece.gridSize[1] * CELL_SIZE
 
   const offsetX =
     (piece.cell[0] + piece.gridSize[0] / 2 - itemGridSize[0] / 2) * CELL_SIZE
@@ -155,8 +156,8 @@ function RiserPiece3MF({
   }, [model])
 
   const scale = useMemo<[number, number, number]>(() => {
-    const targetW = pieceGridSize[0] * CELL_SIZE - 1.5
-    const targetD = pieceGridSize[1] * CELL_SIZE - 1.5
+    const targetW = pieceGridSize[0] * CELL_SIZE
+    const targetD = pieceGridSize[1] * CELL_SIZE
     const targetH = layerHeight
     const sx = size.x > 0 ? targetW / size.x : Infinity
     const sy = size.y > 0 ? targetH / size.y : Infinity
@@ -191,13 +192,14 @@ export function RiserStack({
   placement,
   worldX,
   worldZ,
+  baseY,
   color,
   roughness,
 }: RiserStackProps) {
   let currentY = 0
 
   return (
-    <group>
+    <group position={[0, baseY, 0]}>
       {placement.risers.map((layer, layerIdx) => {
         const layerY = currentY
         currentY += layer.height
