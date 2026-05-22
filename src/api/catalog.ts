@@ -26,9 +26,16 @@ export async function fetchPresets(): Promise<Preset[]> {
   return res.json()
 }
 
+export async function fetchRisers(): Promise<CatalogItem[]> {
+  const res = await fetch(`${BASE}data/risers.json`)
+  if (!res.ok) throw new Error(`Failed to fetch risers: ${res.status}`)
+  return res.json()
+}
+
 export interface CatalogData {
   blocks: BlockCatalogItem[]
   items: CatalogItem[]
+  risers: CatalogItem[]
   categories: string[]
   presets: Preset[]
 }
@@ -36,12 +43,13 @@ export interface CatalogData {
 const MOCK_DELAY_MS = 300
 
 export async function fetchCatalog(): Promise<CatalogData> {
-  const [blocks, items, presets] = await Promise.all([
+  const [blocks, items, risers, presets] = await Promise.all([
     fetchBlocks(),
     fetchItems(),
+    fetchRisers(),
     fetchPresets(),
     new Promise((r) => setTimeout(r, MOCK_DELAY_MS)),
   ])
-  const categories = ["全部", ...new Set(items.flatMap((i) => i.categories))]
-  return { blocks, items, categories, presets }
+  const categories = ["全部", ...new Set([...items, ...risers].flatMap((i) => i.categories))]
+  return { blocks, items, risers, categories, presets }
 }

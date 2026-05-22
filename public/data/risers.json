@@ -1,0 +1,41 @@
+[
+  {
+    "sku": "31001",
+    "sku_name": "R-2x1-H5-STD",
+    "display_name": "增高件 R5",
+    "desc": "标准增高件，2x1 规格，5mm 增高",
+    "order": 1,
+    "type": "riser",
+    "categories": ["增高件"],
+    "gridSize": [2, 1],
+    "height": 5,
+    "modelPath": "models/items/r/R-2x1-H5-STD.3mf",
+    "modelRotation": [90, 0, 0]
+  },
+  {
+    "sku": "31002",
+    "sku_name": "R-2x1-H10-STD",
+    "display_name": "增高件 R10",
+    "desc": "标准增高件，2x1 规格，10mm 增高",
+    "order": 2,
+    "type": "riser",
+    "categories": ["增高件"],
+    "gridSize": [2, 1],
+    "height": 10,
+    "modelPath": "models/items/r/R-2x1-H10-STD.3mf",
+    "modelRotation": [90, 0, 0]
+  },
+  {
+    "sku": "31003",
+    "sku_name": "R-2x1-H20-STD",
+    "display_name": "增高件 R20",
+    "desc": "标准增高件，2x1 规格，20mm 增高",
+    "order": 3,
+    "type": "riser",
+    "categories": ["增高件"],
+    "gridSize": [2, 1],
+    "height": 20,
+    "modelPath": "models/items/r/R-2x1-H20-STD.3mf",
+    "modelRotation": [90, 0, 0]
+  }
+]

@@ -5,10 +5,12 @@ import { useLoader } from "@react-three/fiber"
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
 import type { BlockCatalogItem } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
+import { getRiserTotalHeight } from "@/types/editor"
 import { cellToWorld } from "@/lib/coordinates"
 import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku } from "@/hooks/use-catalog"
-import { useEditorStore } from "@/stores/editor-store"
+import { useEditorStore, getRiserHeightAtCell } from "@/stores/editor-store"
+import { RiserStack } from "./RiserStack"
 
 interface PlacedItemsProps {
   block: BlockCatalogItem
@@ -37,9 +39,11 @@ interface PlacedModelProps {
   placement: Placement
   worldX: number
   worldZ: number
+  yOffset: number
   color: string
   roughness: number
   selected: boolean
+  problem: boolean
   events: PlacementEventHandlers
 }
 
@@ -49,9 +53,11 @@ function PlacedModel({
   placement,
   worldX,
   worldZ,
+  yOffset,
   color,
   roughness,
   selected,
+  problem,
   events,
 }: PlacedModelProps) {
   const modelUrl = useMemo(() => {
@@ -78,10 +84,10 @@ function PlacedModel({
         color,
         roughness,
         metalness: 0,
-        emissive: selected ? "#7aa2ff" : "#000000",
-        emissiveIntensity: selected ? 0.35 : 0,
+        emissive: selected ? "#7aa2ff" : problem ? "#ffaa00" : "#000000",
+        emissiveIntensity: selected ? 0.35 : problem ? 0.5 : 0,
       }),
-    [color, roughness, selected],
+    [color, roughness, selected, problem],
   )
   const { center, minY, size } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model)
@@ -96,14 +102,14 @@ function PlacedModel({
     const targetW = placement.gridSize[0] * CELL_SIZE - 1.5
     const targetD = placement.gridSize[1] * CELL_SIZE - 1.5
     const targetH = placement.height
-    const sx = size.x > 0 ? targetW / size.x : Infinity
-    const sy = size.y > 0 ? targetH / size.y : Infinity
-    const sz = size.z > 0 ? targetD / size.z : Infinity
-    const uniformScale = Math.min(sx, sy, sz)
-    const safeScale = Number.isFinite(uniformScale) && uniformScale > 0
-      ? uniformScale
-      : 1
-    return [safeScale, safeScale, safeScale]
+    const sx = size.x > 0 ? targetW / size.x : 1
+    const sy = size.y > 0 ? targetH / size.y : 1
+    const sz = size.z > 0 ? targetD / size.z : 1
+    return [
+      Number.isFinite(sx) ? sx : 1,
+      Number.isFinite(sy) ? sy : 1,
+      Number.isFinite(sz) ? sz : 1,
+    ]
   }, [placement.gridSize, placement.height, size.x, size.y, size.z])
 
   useEffect(() => {
@@ -121,7 +127,7 @@ function PlacedModel({
 
   return (
     <group
-      position={[worldX, 0, worldZ]}
+      position={[worldX, yOffset, worldZ]}
       scale={scale}
       onPointerDown={events.onPointerDown}
       onPointerMove={events.onPointerMove}
@@ -149,6 +155,8 @@ export function PlacedItems({
   onMovePlacement,
   onDragPlacementChange,
 }: PlacedItemsProps) {
+  const problemPlacementIds = useEditorStore((s) => s.problemPlacementIds)
+  const selectedCatalogSku = useEditorStore((s) => s.selectedCatalogSku)
   const [innerW, innerD] = block.innerSize
   const [cols, rows] = block.cellGrid
 
@@ -178,9 +186,13 @@ export function PlacedItems({
         const w = p.gridSize[0] * CELL_SIZE - 1.5
         const d = p.gridSize[1] * CELL_SIZE - 1.5
         const selected = selectedPlacementId === p.id
+        const isProblem = problemPlacementIds.includes(p.id)
         const dragging = draggingPlacementId === p.id
+        const isRiserItem = findItemBySku(p.sku)?.type === "riser"
+        const passThrough = isRiserItem && !!selectedCatalogSku
         const events: PlacementEventHandlers = {
           onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+            if (passThrough) return
             e.stopPropagation()
             if (e.pointerType === "mouse" && e.button !== 0) return
             onSelectPlacement(p.id)
@@ -197,6 +209,7 @@ export function PlacedItems({
             useEditorStore.getState().setPlacementDragActive(true)
           },
           onPointerMove: (e: ThreeEvent<PointerEvent>) => {
+            if (passThrough) return
             e.stopPropagation()
             if (!dragging) return
             if (e.pointerType === "mouse" && (e.buttons & 1) !== 1) return
@@ -205,6 +218,7 @@ export function PlacedItems({
             onMovePlacement(p.id, cell[0], cell[1])
           },
           onPointerUp: (e: ThreeEvent<PointerEvent>) => {
+            if (passThrough) return
             e.stopPropagation()
             const target = e.target as EventTarget & {
               setPointerCapture?: (pointerId: number) => void
@@ -218,6 +232,7 @@ export function PlacedItems({
             useEditorStore.getState().setPlacementDragActive(false)
           },
           onPointerCancel: (e: ThreeEvent<PointerEvent>) => {
+            if (passThrough) return
             e.stopPropagation()
             const target = e.target as EventTarget & {
               setPointerCapture?: (pointerId: number) => void
@@ -231,47 +246,77 @@ export function PlacedItems({
             useEditorStore.getState().setPlacementDragActive(false)
           },
           onClick: (e: ThreeEvent<MouseEvent>) => {
+            if (passThrough) return
             e.stopPropagation()
             onSelectPlacement(p.id)
           },
         }
 
+        const isRiser = catalogItem?.type === "riser"
+        const embeddedRiserHeight = getRiserTotalHeight(p)
+        const standaloneRiserHeight = isRiser
+          ? 0
+          : getRiserHeightAtCell(p.cell[0], p.cell[1], placements)
+        const yBase = embeddedRiserHeight + standaloneRiserHeight
+
         if (catalogItem?.modelPath) {
           return (
-            <PlacedModel
-              key={p.id}
-              modelPath={catalogItem.modelPath}
-              modelRotation={catalogItem.modelRotation}
-              placement={p}
-              worldX={wx}
-              worldZ={wz}
-              color={color}
-              roughness={roughness}
-              selected={selected}
-              events={events}
-            />
+            <group key={p.id}>
+              {embeddedRiserHeight > 0 && (
+                <RiserStack
+                  placement={p}
+                  worldX={wx}
+                  worldZ={wz}
+                  color={color}
+                  roughness={roughness}
+                />
+              )}
+              <PlacedModel
+                modelPath={catalogItem.modelPath}
+                modelRotation={catalogItem.modelRotation}
+                placement={p}
+                worldX={wx}
+                worldZ={wz}
+                yOffset={yBase}
+                color={color}
+                roughness={roughness}
+                selected={selected}
+                problem={isProblem}
+                events={events}
+              />
+            </group>
           )
         }
 
         return (
-          <mesh
-            key={p.id}
-            position={[wx, p.height / 2, wz]}
-            onPointerDown={events.onPointerDown}
-            onPointerMove={events.onPointerMove}
-            onPointerUp={events.onPointerUp}
-            onPointerCancel={events.onPointerCancel}
-            onClick={events.onClick}
-          >
-            <boxGeometry args={[w, p.height, d]} />
-            <meshStandardMaterial
-              color={color}
-              roughness={roughness}
-              metalness={0}
-              emissive={selected ? "#7aa2ff" : "#000000"}
-              emissiveIntensity={selected ? 0.35 : 0}
-            />
-          </mesh>
+          <group key={p.id}>
+            {embeddedRiserHeight > 0 && (
+              <RiserStack
+                placement={p}
+                worldX={wx}
+                worldZ={wz}
+                color={color}
+                roughness={roughness}
+              />
+            )}
+            <mesh
+              position={[wx, yBase + p.height / 2, wz]}
+              onPointerDown={events.onPointerDown}
+              onPointerMove={events.onPointerMove}
+              onPointerUp={events.onPointerUp}
+              onPointerCancel={events.onPointerCancel}
+              onClick={events.onClick}
+            >
+              <boxGeometry args={[w, p.height, d]} />
+              <meshStandardMaterial
+                color={color}
+                roughness={roughness}
+                metalness={0}
+                emissive={selected ? "#7aa2ff" : isProblem ? "#ffaa00" : "#000000"}
+                emissiveIntensity={selected ? 0.35 : isProblem ? 0.5 : 0}
+              />
+            </mesh>
+          </group>
         )
       })}
     </group>

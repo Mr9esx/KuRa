@@ -26,6 +26,7 @@ interface EditorState {
   blockColorId: string
   itemColorId: string
   tourStepId: string | null
+  problemPlacementIds: string[]
 }
 
 interface EditorActions {
@@ -44,11 +45,18 @@ interface EditorActions {
   setItemColor: (id: string) => void
   applyPreset: (preset: Preset) => void
   setTourStepId: (id: string | null) => void
+  setProblemPlacementIds: (ids: string[]) => void
 }
 
-function getOccupiedCells(placements: Placement[]): Set<string> {
+function isRiserPlacement(p: Placement): boolean {
+  const cat = findItemBySku(p.sku)
+  return cat?.type === "riser"
+}
+
+function getOccupiedCells(placements: Placement[], excludeRisers = false): Set<string> {
   const set = new Set<string>()
   for (const p of placements) {
+    if (excludeRisers && isRiserPlacement(p)) continue
     for (let c = 0; c < p.gridSize[0]; c++) {
       for (let r = 0; r < p.gridSize[1]; r++) {
         set.add(`${p.cell[0] + c},${p.cell[1] + r}`)
@@ -64,18 +72,38 @@ export function canPlace(
   gridSize: [number, number],
   block: BlockCatalogItem,
   placements: Placement[],
+  placingType?: "item" | "riser",
 ): boolean {
   const [bCols, bRows] = block.cellGrid
   if (col < 0 || row < 0) return false
   if (col + gridSize[0] > bCols || row + gridSize[1] > bRows) return false
 
-  const occupied = getOccupiedCells(placements)
+  const isPlacingItem = placingType !== "riser"
+  const occupied = getOccupiedCells(placements, isPlacingItem)
   for (let c = col; c < col + gridSize[0]; c++) {
     for (let r = row; r < row + gridSize[1]; r++) {
       if (occupied.has(`${c},${r}`)) return false
     }
   }
   return true
+}
+
+/**
+ * Get the total riser height at a given cell from standalone riser placements.
+ */
+export function getRiserHeightAtCell(
+  col: number,
+  row: number,
+  placements: Placement[],
+): number {
+  let total = 0
+  for (const p of placements) {
+    if (!isRiserPlacement(p)) continue
+    const inCol = col >= p.cell[0] && col < p.cell[0] + p.gridSize[0]
+    const inRow = row >= p.cell[1] && row < p.cell[1] + p.gridSize[1]
+    if (inCol && inRow) total += p.height
+  }
+  return total
 }
 
 export const useEditorStore = create<EditorState & EditorActions>()(
@@ -90,6 +118,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
     blockColorId: "ivory",
     itemColorId: "ivory",
     tourStepId: null,
+    problemPlacementIds: [],
 
     setBlock: (block) =>
       set((state) => {
@@ -137,7 +166,8 @@ export const useEditorStore = create<EditorState & EditorActions>()(
       const { block, placements } = get()
       const item = findItemBySku(sku)
       if (!item) return
-      if (!canPlace(col, row, item.gridSize, block, placements)) return
+      const placingType = item.type === "riser" ? "riser" : "item"
+      if (!canPlace(col, row, item.gridSize, block, placements, placingType)) return
 
       set((state) => {
         const id = crypto.randomUUID()
@@ -147,8 +177,10 @@ export const useEditorStore = create<EditorState & EditorActions>()(
           cell: [col, row],
           gridSize: item.gridSize,
           height: item.height,
+          risers: [],
         })
         state.selectedPlacementId = id
+        state.problemPlacementIds = []
       })
     },
 
@@ -158,12 +190,14 @@ export const useEditorStore = create<EditorState & EditorActions>()(
       if (!target) return
 
       const others = placements.filter((p) => p.id !== id)
-      if (!canPlace(col, row, target.gridSize, block, others)) return
+      const movingType = isRiserPlacement(target) ? "riser" : "item"
+      if (!canPlace(col, row, target.gridSize, block, others, movingType)) return
 
       set((state) => {
         const current = state.placements.find((p) => p.id === id)
         if (!current) return
         current.cell = [col, row]
+        state.problemPlacementIds = []
       })
     },
 
@@ -174,6 +208,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
           state.selectedPlacementId = null
         }
         state.placementDragActive = false
+        state.problemPlacementIds = []
       }),
 
     clearAll: () =>
@@ -182,6 +217,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.hoveredCell = null
         state.selectedPlacementId = null
         state.placementDragActive = false
+        state.problemPlacementIds = []
       }),
 
     setMaterialColor: (id) =>
@@ -216,6 +252,7 @@ export const useEditorStore = create<EditorState & EditorActions>()(
             cell: p.cell,
             gridSize: item?.gridSize ?? [1, 1],
             height: item?.height ?? 20,
+            risers: [],
           }
         })
       })
@@ -224,6 +261,11 @@ export const useEditorStore = create<EditorState & EditorActions>()(
     setTourStepId: (id) =>
       set((state) => {
         state.tourStepId = id
+      }),
+
+    setProblemPlacementIds: (ids) =>
+      set((state) => {
+        state.problemPlacementIds = ids
       }),
   })),
 )

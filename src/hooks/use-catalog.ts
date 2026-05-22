@@ -40,10 +40,19 @@ export function useCatalog() {
 
 export function findItemBySku(sku: string): CatalogItem | undefined {
   return cache?.items.find((i) => i.sku === sku)
+    ?? cache?.risers.find((r) => r.sku === sku)
 }
 
 export function findBlockBySku(sku: string): BlockCatalogItem | undefined {
   return cache?.blocks.find((b) => b.sku === sku)
+}
+
+export function findRiserBySku(sku: string): CatalogItem | undefined {
+  return cache?.risers.find((r) => r.sku === sku)
+}
+
+export function getRisers(): CatalogItem[] {
+  return cache?.risers ?? []
 }
 
 export function getPresets(): Preset[] {

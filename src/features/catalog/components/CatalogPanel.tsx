@@ -283,12 +283,17 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     setCanScrollBlockRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
   }, [])
 
+  const allItems = useMemo(() => {
+    if (!data) return []
+    return [...data.items, ...data.risers]
+  }, [data])
+
   const filteredItems = useMemo(() => {
     if (!data) return []
     return category === "全部"
-      ? data.items
-      : data.items.filter((item) => item.categories.includes(category))
-  }, [category, data])
+      ? allItems
+      : allItems.filter((item) => item.categories.includes(category))
+  }, [category, data, allItems])
 
   const groups = useMemo(() => {
     if (!data) return []

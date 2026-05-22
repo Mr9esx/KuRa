@@ -1,4 +1,4 @@
-import { Suspense, useRef, useEffect, useCallback, useState, type DragEvent } from "react"
+import { Suspense, useRef, useEffect, useCallback, useState, useMemo, type DragEvent } from "react"
 import * as THREE from "three"
 import { Canvas, useThree, useFrame } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
@@ -13,8 +13,10 @@ import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
 import { APP_NAME, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
-import { getCatalogItemDisplayName, type Preset } from "@/types/catalog"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp, Maximize, Minimize } from "lucide-react"
+import { getCatalogItemDisplayName, type BlockCatalogItem, type Preset } from "@/types/catalog"
+import type { Placement } from "@/types/editor"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Layers, CircleHelp, Maximize, Minimize, AlertTriangle } from "lucide-react"
+import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
@@ -532,6 +534,12 @@ export function MobileActionBar() {
   const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
+  const [validationProblems, setValidationProblems] = useState<LayoutProblem[]>([])
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false)
+  const [exportPreviewOpen, setExportPreviewOpen] = useState(false)
+  const [pendingExportType, setPendingExportType] = useState<ExportType>("all")
+  const pendingExportRef = useRef<(() => void) | null>(null)
+  const setProblemPlacementIds = useEditorStore((s) => s.setProblemPlacementIds)
   const barRef = useRef<HTMLDivElement>(null)
   const [presetPanelMaxWidth, setPresetPanelMaxWidth] = useState(720)
   const blockColorId = useEditorStore((s) => s.blockColorId)
@@ -623,6 +631,30 @@ export function MobileActionBar() {
     saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
   }
 
+  const exportFnMap: Record<ExportType, () => void> = {
+    model: exportModelMock,
+    shopping: exportShoppingList,
+    all: exportAllMock,
+  }
+
+  const openExportPreview = (type: ExportType) => {
+    setPendingExportType(type)
+    setExportPreviewOpen(true)
+  }
+
+  const handleConfirmExport = () => {
+    setExportPreviewOpen(false)
+    const exportFn = exportFnMap[pendingExportType]
+    const result = validateLayout(placements, block)
+    if (result.valid) {
+      exportFn()
+    } else {
+      pendingExportRef.current = exportFn
+      setValidationProblems(result.problems)
+      setValidationDialogOpen(true)
+    }
+  }
+
   const iconTrigger =
     "inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground [&>svg+svg]:hidden"
 
@@ -675,19 +707,19 @@ export function MobileActionBar() {
             <NavigationMenuContent>
               <div className="flex min-w-[180px] flex-col gap-1 p-2">
                 <button
-                  onClick={exportModelMock}
+                  onClick={() => openExportPreview("model")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   导出模型（Mock）
                 </button>
                 <button
-                  onClick={exportShoppingList}
+                  onClick={() => openExportPreview("shopping")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   导出购物清单（Mock）
                 </button>
                 <button
-                  onClick={exportAllMock}
+                  onClick={() => openExportPreview("all")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   全部导出（Mock）
@@ -747,57 +779,69 @@ export function MobileActionBar() {
         onOpenChange={(open) => !open && setActivePreset(null)}
       />
 
-      <Dialog.Root open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <DeleteConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        onConfirm={() => {
+          if (selectedPlacementId) removePlacement(selectedPlacementId)
+          setConfirmDeleteOpen(false)
+        }}
+      />
+
+      <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-              确认删除选中的收纳件吗？
-            </Dialog.Description>
-            <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
-                取消
-              </Dialog.Close>
-              <button
-                onClick={() => {
-                  if (selectedPlacementId) removePlacement(selectedPlacementId)
-                  setConfirmDeleteOpen(false)
-                }}
-                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
-              >
-                确认删除
-              </button>
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background shadow-xl">
+            <div className="p-4">
+              <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+                确认清空当前布局吗？此操作不可撤销。
+              </Dialog.Description>
+            </div>
+            <div className="border-t border-border p-4">
+              <div className="flex gap-2">
+                <Dialog.Close className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                  取消
+                </Dialog.Close>
+                <button
+                  onClick={() => {
+                    clearAll()
+                    setConfirmClearOpen(false)
+                  }}
+                  className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  确认清空
+                </button>
+              </div>
             </div>
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-              确认清空当前布局吗？此操作不可撤销。
-            </Dialog.Description>
-            <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
-                取消
-              </Dialog.Close>
-              <button
-                onClick={() => {
-                  clearAll()
-                  setConfirmClearOpen(false)
-                }}
-                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
-              >
-                确认清空
-              </button>
-            </div>
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <ExportPreviewDialog
+        open={exportPreviewOpen}
+        onOpenChange={setExportPreviewOpen}
+        exportType={pendingExportType}
+        block={block}
+        placements={placements}
+        onConfirmExport={handleConfirmExport}
+      />
+
+      <ValidationWarningDialog
+        open={validationDialogOpen}
+        onOpenChange={setValidationDialogOpen}
+        problems={validationProblems}
+        onForceExport={() => {
+          setValidationDialogOpen(false)
+          pendingExportRef.current?.()
+          pendingExportRef.current = null
+        }}
+        onHighlight={() => {
+          setProblemPlacementIds(validationProblems.map((p) => p.placementId))
+          setValidationDialogOpen(false)
+          pendingExportRef.current = null
+        }}
+      />
     </div>
   )
 }
@@ -807,6 +851,12 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
+  const [validationProblems, setValidationProblems] = useState<LayoutProblem[]>([])
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false)
+  const [exportPreviewOpen, setExportPreviewOpen] = useState(false)
+  const [pendingExportType, setPendingExportType] = useState<ExportType>("all")
+  const pendingExportRef = useRef<(() => void) | null>(null)
+  const setProblemPlacementIds = useEditorStore((s) => s.setProblemPlacementIds)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [presetPanelMaxWidth, setPresetPanelMaxWidth] = useState(720)
   const blockColorId = useEditorStore((s) => s.blockColorId)
@@ -906,6 +956,30 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
     saveAs(blob, `${EXPORT_PREFIX}-export-${Date.now()}.zip`)
   }
 
+  const exportFnMap: Record<ExportType, () => void> = {
+    model: exportModelMock,
+    shopping: exportShoppingList,
+    all: exportAllMock,
+  }
+
+  const openExportPreview = (type: ExportType) => {
+    setPendingExportType(type)
+    setExportPreviewOpen(true)
+  }
+
+  const handleConfirmExport = () => {
+    setExportPreviewOpen(false)
+    const exportFn = exportFnMap[pendingExportType]
+    const result = validateLayout(placements, block)
+    if (result.valid) {
+      exportFn()
+    } else {
+      pendingExportRef.current = exportFn
+      setValidationProblems(result.problems)
+      setValidationDialogOpen(true)
+    }
+  }
+
   if (mobile) return <MobileTopBar />
 
   const menus = (
@@ -957,19 +1031,19 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
             <NavigationMenuContent>
               <div className="flex min-w-[180px] flex-col gap-1 p-2">
                 <button
-                  onClick={exportModelMock}
+                  onClick={() => openExportPreview("model")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   导出模型（Mock）
                 </button>
                 <button
-                  onClick={exportShoppingList}
+                  onClick={() => openExportPreview("shopping")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   导出购物清单（Mock）
                 </button>
                 <button
-                  onClick={exportAllMock}
+                  onClick={() => openExportPreview("all")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   全部导出（Mock）
@@ -1049,57 +1123,69 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
         onOpenChange={(open) => !open && setActivePreset(null)}
       />
 
-      <Dialog.Root open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <DeleteConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        onConfirm={() => {
+          if (selectedPlacementId) removePlacement(selectedPlacementId)
+          setConfirmDeleteOpen(false)
+        }}
+      />
+
+      <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-              确认删除选中的收纳件吗？
-            </Dialog.Description>
-            <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
-                取消
-              </Dialog.Close>
-              <button
-                onClick={() => {
-                  if (selectedPlacementId) removePlacement(selectedPlacementId)
-                  setConfirmDeleteOpen(false)
-                }}
-                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
-              >
-                确认删除
-              </button>
+          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background shadow-xl">
+            <div className="p-4">
+              <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+                确认清空当前布局吗？此操作不可撤销。
+              </Dialog.Description>
+            </div>
+            <div className="border-t border-border p-4">
+              <div className="flex gap-2">
+                <Dialog.Close className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                  取消
+                </Dialog.Close>
+                <button
+                  onClick={() => {
+                    clearAll()
+                    setConfirmClearOpen(false)
+                  }}
+                  className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  确认清空
+                </button>
+              </div>
             </div>
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
-          <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-4 shadow-xl">
-            <Dialog.Title className="text-sm font-semibold">确认清空</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-              确认清空当前布局吗？此操作不可撤销。
-            </Dialog.Description>
-            <div className="mt-4 flex justify-end gap-2">
-              <Dialog.Close className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted">
-                取消
-              </Dialog.Close>
-              <button
-                onClick={() => {
-                  clearAll()
-                  setConfirmClearOpen(false)
-                }}
-                className="rounded-md bg-destructive px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
-              >
-                确认清空
-              </button>
-            </div>
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <ExportPreviewDialog
+        open={exportPreviewOpen}
+        onOpenChange={setExportPreviewOpen}
+        exportType={pendingExportType}
+        block={block}
+        placements={placements}
+        onConfirmExport={handleConfirmExport}
+      />
+
+      <ValidationWarningDialog
+        open={validationDialogOpen}
+        onOpenChange={setValidationDialogOpen}
+        problems={validationProblems}
+        onForceExport={() => {
+          setValidationDialogOpen(false)
+          pendingExportRef.current?.()
+          pendingExportRef.current = null
+        }}
+        onHighlight={() => {
+          setProblemPlacementIds(validationProblems.map((p) => p.placementId))
+          setValidationDialogOpen(false)
+          pendingExportRef.current = null
+        }}
+      />
     </div>
   )
 }
@@ -1264,6 +1350,207 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         {mem !== null && <div>Mem: {mem} MB</div>}
       </div>
     </div>
+  )
+}
+
+function DeleteConfirmDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background shadow-xl">
+          <div className="p-4">
+            <Dialog.Title className="text-sm font-semibold">确认删除</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+              确认删除选中的收纳件吗？
+            </Dialog.Description>
+          </div>
+          <div className="border-t border-border p-4">
+            <div className="flex gap-2">
+              <Dialog.Close className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                取消
+              </Dialog.Close>
+              <button
+                onClick={onConfirm}
+                className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+function ValidationWarningDialog({
+  open,
+  onOpenChange,
+  problems,
+  onForceExport,
+  onHighlight,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  problems: LayoutProblem[]
+  onForceExport: () => void
+  onHighlight: () => void
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] flex max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+          <div className="shrink-0 p-4 pb-0">
+            <Dialog.Title className="flex items-center gap-2 text-sm font-semibold">
+              <AlertTriangle className="size-4 text-amber-500" />
+              导出前提醒
+            </Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+              以下组件的增高件缺少足够的侧面支撑，物品放入后可能不够稳固，存在倾倒风险。如果这是你的设计意图，可以点击"仍然导出"。
+            </Dialog.Description>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            <div className="space-y-2">
+              {problems.map((p) => (
+                <div
+                  key={p.placementId}
+                  className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                >
+                  <span className="font-medium">{p.itemName}</span>
+                  <div className="mt-0.5 text-amber-600 dark:text-amber-500">
+                    {p.reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="shrink-0 border-t border-border p-4">
+            <div className="flex gap-2">
+              <button
+                onClick={onHighlight}
+                className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                查看问题组件
+              </button>
+              <button
+                onClick={onForceExport}
+                className="flex-1 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+              >
+                仍然导出
+              </button>
+            </div>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+type ExportType = "model" | "shopping" | "all"
+
+const EXPORT_LABELS: Record<ExportType, string> = {
+  model: "导出模型（Mock）",
+  shopping: "导出购物清单（Mock）",
+  all: "全部导出（Mock）",
+}
+
+function ExportPreviewDialog({
+  open,
+  onOpenChange,
+  exportType,
+  block,
+  placements,
+  onConfirmExport,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  exportType: ExportType
+  block: BlockCatalogItem
+  placements: Placement[]
+  onConfirmExport: () => void
+}) {
+  const shoppingList = useMemo(() => {
+    const counter = new Map<string, number>()
+    for (const p of placements) {
+      counter.set(p.sku, (counter.get(p.sku) ?? 0) + 1)
+    }
+    return Array.from(counter.entries()).map(([sku, qty]) => ({
+      sku,
+      name: getItemNameBySku(sku),
+      qty,
+    }))
+  }, [placements])
+
+  const totalItems = placements.length
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] flex max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+          <div className="shrink-0 p-4 pb-0">
+            <Dialog.Title className="text-sm font-semibold">
+              {EXPORT_LABELS[exportType]}
+            </Dialog.Title>
+            <Dialog.Description className="mt-1 text-xs text-muted-foreground">
+              请确认导出内容
+            </Dialog.Description>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            <div className="rounded-lg border border-border">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <span className="text-xs font-medium">框体</span>
+                <span className="text-xs text-muted-foreground">{block.name}</span>
+              </div>
+              <div className="px-3 py-2">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-xs font-medium">组件清单</span>
+                  <span className="text-xs text-muted-foreground">共 {totalItems} 件</span>
+                </div>
+                {shoppingList.length === 0 ? (
+                  <div className="py-2 text-center text-xs text-muted-foreground">暂无组件</div>
+                ) : (
+                  <div className="space-y-1">
+                    {shoppingList.map((item) => (
+                      <div key={item.sku} className="flex items-center justify-between text-xs">
+                        <span className="text-foreground/80">{item.name}</span>
+                        <span className="tabular-nums text-muted-foreground">×{item.qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="shrink-0 border-t border-border p-4">
+            <div className="flex gap-2">
+              <Dialog.Close className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                取消
+              </Dialog.Close>
+              <button
+                onClick={onConfirmExport}
+                disabled={totalItems === 0}
+                className="flex-1 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                确认导出
+              </button>
+            </div>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 

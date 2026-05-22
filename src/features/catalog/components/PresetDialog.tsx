@@ -158,16 +158,16 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
           <div className="shrink-0 border-t border-border p-4">
             <div className="flex gap-2">
               <button
+                onClick={() => {}}
+                className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                导出清单
+              </button>
+              <button
                 onClick={handleApply}
                 className="flex-1 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
               >
                 应用方案
-              </button>
-              <button
-                onClick={() => {}}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-              >
-                导出清单
               </button>
             </div>
           </div>
