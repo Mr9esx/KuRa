@@ -7,7 +7,7 @@ import { findBlockBySku, findItemBySku } from "@/hooks/use-catalog"
 const FALLBACK_BLOCK: BlockCatalogItem = {
   sku: "41001",
   sku_name: "B-6x4-SHELL-框体",
-  display_name: "B-6x4-SHELL-框体",
+  display_name: "6x4 标准框体",
   name: "B-6x4-SHELL-框体",
   type: "block",
   categories: ["基础框体"],

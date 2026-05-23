@@ -1,6 +1,7 @@
 [
   {
     "sku": "41001",
+    "display_name": "6x4 标准框体",
     "name": "B-6x4-SHELL-框体",
     "type": "block",
     "categories": ["基础框体"],
@@ -14,6 +15,7 @@
   },
   {
     "sku": "41002",
+    "display_name": "6x4 开孔框体",
     "name": "B-6x4-HOLE-框体",
     "type": "block",
     "categories": ["开孔框体"],
@@ -27,6 +29,7 @@
   },
   {
     "sku": "41003",
+    "display_name": "4x2 IKEA框体",
     "name": "B-4x2-IKEA-框体",
     "type": "block",
     "categories": ["IKEA框体"],

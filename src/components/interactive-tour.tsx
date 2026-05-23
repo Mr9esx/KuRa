@@ -16,6 +16,9 @@ interface TourStep {
   targetId: string
   position: "top" | "bottom" | "left" | "right" | "inside"
   waitFor: () => boolean
+  hintStatusText?: string
+  showHintStatus?: boolean
+  primaryActionLabel?: string
   onEnter?: () => void
   showOverlay?: boolean
 }
@@ -100,6 +103,18 @@ function getSteps(mobile: boolean): TourStep[] {
         return selectedInDeleteStep && s.placements.length < countBeforeDelete
       },
     },
+    {
+      id: "find-export",
+      title: "导入导出入口在这里",
+      desc: mobile
+        ? "下方工具栏这个图标就是导入导出入口，之后随时可以在这里导出或导入布局。"
+        : "工具栏左侧这里就是导入导出入口，之后随时可以在这里导出或导入布局。",
+      targetId: mobile ? "tour-m-export" : "tour-export",
+      position: mobile ? "top" : "bottom",
+      showHintStatus: false,
+      primaryActionLabel: "完成引导",
+      waitFor: () => false,
+    },
   ]
 }
 
@@ -108,6 +123,7 @@ function HintCard({
   stepIndex,
   total,
   onSkip,
+  onPrimaryAction,
   className,
   style,
 }: {
@@ -115,6 +131,7 @@ function HintCard({
   stepIndex: number
   total: number
   onSkip: () => void
+  onPrimaryAction?: () => void
   className?: string
   style?: React.CSSProperties
 }) {
@@ -136,13 +153,23 @@ function HintCard({
       </div>
       <div className="text-sm font-medium">{step.title}</div>
       <div className="mt-1 text-xs text-muted-foreground">{step.desc}</div>
-      <div className="mt-3 flex items-center gap-1.5">
-        <span className="relative flex size-2">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
-          <span className="relative inline-flex size-2 rounded-full bg-blue-500" />
-        </span>
-        <span className="text-[11px] text-blue-500">等待你的操作…</span>
-      </div>
+      {step.showHintStatus !== false && (
+        <div className="mt-3 flex items-center gap-1.5">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-blue-500" />
+          </span>
+          <span className="text-[11px] text-blue-500">{step.hintStatusText ?? "等待你的操作…"}</span>
+        </div>
+      )}
+      {step.primaryActionLabel && onPrimaryAction && (
+        <button
+          onClick={onPrimaryAction}
+          className="mt-3 w-full rounded-lg bg-foreground py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
+        >
+          {step.primaryActionLabel}
+        </button>
+      )}
     </div>
   )
 }
@@ -152,11 +179,13 @@ function Hint({
   stepIndex,
   total,
   onSkip,
+  onPrimaryAction,
 }: {
   step: TourStep
   stepIndex: number
   total: number
   onSkip: () => void
+  onPrimaryAction?: () => void
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
 
@@ -200,6 +229,7 @@ function Hint({
               stepIndex={stepIndex}
               total={total}
               onSkip={onSkip}
+              onPrimaryAction={onPrimaryAction}
               className="backdrop-blur-sm bg-background/95"
             />
           </div>
@@ -285,6 +315,7 @@ function Hint({
         stepIndex={stepIndex}
         total={total}
         onSkip={onSkip}
+        onPrimaryAction={onPrimaryAction}
         className="z-[9999]"
         style={cardStyle}
       />
@@ -400,6 +431,15 @@ export function InteractiveTour() {
     localStorage.setItem(STORAGE_KEY, "true")
   }, [])
 
+  const advanceStep = useCallback(() => {
+    const next = stepIndex + 1
+    if (next >= steps.length) {
+      complete()
+      return
+    }
+    setStepIndex(next)
+  }, [complete, stepIndex, steps.length])
+
   const startTour = useCallback(() => {
     useEditorStore.getState().clearAll()
     useEditorStore.getState().selectCatalogItem(null)
@@ -421,12 +461,7 @@ export function InteractiveTour() {
       if (handled) return true
       if (currentStep.waitFor()) {
         handled = true
-        const nextIndex = stepIndex + 1
-        if (nextIndex >= steps.length) {
-          complete()
-        } else {
-          setStepIndex(nextIndex)
-        }
+        advanceStep()
         return true
       }
       return false
@@ -438,7 +473,7 @@ export function InteractiveTour() {
       check()
     })
     return unsub
-  }, [phase, currentStep, stepIndex, steps.length, complete])
+  }, [phase, currentStep, stepIndex, steps.length, advanceStep])
 
   if (phase === "idle" || phase === "done") return null
 
@@ -455,6 +490,7 @@ export function InteractiveTour() {
           stepIndex={stepIndex}
           total={steps.length}
           onSkip={skip}
+          onPrimaryAction={currentStep.primaryActionLabel ? advanceStep : undefined}
         />
       )}
     </>

@@ -17,9 +17,9 @@ interface ModelEntry {
 
 function makeDefaultEntries(): ModelEntry[] {
   const paths = [
-    "models/items/B-2x1-H20-八小格.3mf",
-    "models/items/B-2x1-H40-八小格.3mf",
-    "models/items/B-2x1-H80-八小格.3mf",
+    "models/items/f/F-2x1-H20-八小格.3mf",
+    "models/items/f/F-2x1-H40-八小格.3mf",
+    "models/items/f/F-2x1-H80-八小格.3mf",
   ]
   return paths.map((p, i) => ({
     id: `default-${i}`,
@@ -31,6 +31,32 @@ const BASE_MODEL_ROTATION_DEG: [number, number, number] = [-90, 0, 0]
 const BASE_POV_OFFSET_DEG: [number, number, number] = [-10, 0, 0]
 const BASE_COMPOSITION_OFFSET_X = -0.06
 const BASE_COMPOSITION_OFFSET_Y = 0
+
+interface LightSetup {
+  ambient: number
+  key: number
+  fill: number
+}
+
+type LightPresetId = "balanced" | "highContrast" | "softFill" | "custom"
+
+const LIGHT_PRESETS: Record<Exclude<LightPresetId, "custom">, { label: string; values: LightSetup }> = {
+  balanced: {
+    label: "均衡（默认）",
+    values: { ambient: 0.95, key: 0.8, fill: 0.45 },
+  },
+  highContrast: {
+    label: "高对比",
+    values: { ambient: 0.55, key: 1.05, fill: 0.25 },
+  },
+  softFill: {
+    label: "柔和补光",
+    values: { ambient: 1.1, key: 0.65, fill: 0.8 },
+  },
+}
+
+const DEFAULT_LIGHT_PRESET: Exclude<LightPresetId, "custom"> = "balanced"
+const DEFAULT_LIGHT_SETUP = LIGHT_PRESETS[DEFAULT_LIGHT_PRESET].values
 
 function normalizePath(path: string) {
   return path.trim().replace(/^\//, "")
@@ -128,6 +154,9 @@ interface SceneContext {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
   modelRoot: THREE.Group
+  ambientLight: THREE.AmbientLight
+  keyLight: THREE.DirectionalLight
+  fillLight: THREE.DirectionalLight
   dispose: () => void
 }
 
@@ -135,9 +164,10 @@ interface ModelRenderOptions {
   modelRotationDeg: [number, number, number]
   fillRatio: number
   colorHex: string
-  edgeEnabled: boolean
+  edgeMode: EdgeRenderMode
   edgeColorHex: string
   edgeWidthPx: number
+  hardEdgeThresholdDeg: number
 }
 
 interface CameraRenderOptions {
@@ -145,6 +175,52 @@ interface CameraRenderOptions {
   compositionOffsetX: number
   compositionOffsetY: number
 }
+
+type EdgeRenderMode = "none" | "hardEdges" | "wireframe" | "cad"
+
+interface EdgeRenderOptions {
+  mode: EdgeRenderMode
+  colorHex: string
+  widthPx: number
+  hardEdgeThresholdDeg: number
+}
+
+type EdgePresetId = "productOutline" | "structure" | "technical" | "custom"
+
+interface EdgePreset {
+  label: string
+  mode: EdgeRenderMode
+  colorHex: string
+  widthPx: number
+  hardEdgeThresholdDeg: number
+}
+
+const EDGE_PRESETS: Record<Exclude<EdgePresetId, "custom">, EdgePreset> = {
+  productOutline: {
+    label: "产品轮廓",
+    mode: "hardEdges",
+    colorHex: "#0F172A",
+    widthPx: 1.8,
+    hardEdgeThresholdDeg: 68,
+  },
+  structure: {
+    label: "结构展示",
+    mode: "wireframe",
+    colorHex: "#1E293B",
+    widthPx: 1.2,
+    hardEdgeThresholdDeg: 68,
+  },
+  technical: {
+    label: "技术图纸",
+    mode: "cad",
+    colorHex: "#0B0F1A",
+    widthPx: 1.6,
+    hardEdgeThresholdDeg: 55,
+  },
+}
+
+const DEFAULT_EDGE_PRESET: Exclude<EdgePresetId, "custom"> = "productOutline"
+const DEFAULT_EDGE_SETUP = EDGE_PRESETS[DEFAULT_EDGE_PRESET]
 
 function disposeObjectResources(root: THREE.Object3D) {
   root.traverse((obj) => {
@@ -182,18 +258,96 @@ function updateEdgeLineResolution(root: THREE.Object3D, renderer: THREE.WebGLRen
   })
 }
 
-function collectMeshes(root: THREE.Object3D): THREE.Object3D[] {
-  const out: THREE.Object3D[] = []
-  root.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) out.push(obj)
-  })
-  return out
-}
-
 function normalizeHexColor(input: string): string | null {
   const value = input.trim()
   if (/^#[0-9a-fA-F]{6}$/.test(value)) return value.toUpperCase()
   return null
+}
+
+function extractLinePositions(geometry: THREE.BufferGeometry): Float32Array | null {
+  const positions = geometry.attributes.position
+  const raw = positions?.array as ArrayLike<number> | undefined
+  let valid = Boolean(raw && raw.length >= 6 && raw.length % 6 === 0)
+  if (valid && raw) {
+    for (let i = 0; i < raw.length; i++) {
+      if (!Number.isFinite(raw[i] ?? NaN)) {
+        valid = false
+        break
+      }
+    }
+  }
+  if (!valid || !raw) return null
+  return new Float32Array(raw as ArrayLike<number>)
+}
+
+function makeEdgeLines(rawPositions: Float32Array, options: EdgeRenderOptions): LineSegments2 {
+  const edgeGeometry = new LineSegmentsGeometry().setPositions(rawPositions)
+  const edgeMaterial = new LineMaterial({
+    color: new THREE.Color(options.colorHex),
+    linewidth: THREE.MathUtils.clamp(options.widthPx, 0.5, 6),
+    transparent: true,
+    opacity: 0.95,
+    depthTest: true,
+    depthWrite: false,
+    toneMapped: false,
+  })
+  const edgeLines = new LineSegments2(edgeGeometry, edgeMaterial)
+  edgeLines.userData.__itemCardEdge = true
+  edgeLines.renderOrder = 3
+  edgeLines.frustumCulled = false
+  return edgeLines
+}
+
+function createMeshEdgeOverlay(
+  mesh: THREE.Mesh,
+  options: EdgeRenderOptions,
+): LineSegments2 | null {
+  if (options.mode === "none") return null
+  let merged: THREE.BufferGeometry | null = null
+  let lineGeometry: THREE.BufferGeometry | null = null
+  try {
+    if (options.mode === "hardEdges" || options.mode === "cad") {
+      merged = mergeVertices(mesh.geometry.clone(), 1e-4)
+      lineGeometry = new THREE.EdgesGeometry(
+        merged,
+        THREE.MathUtils.clamp(options.hardEdgeThresholdDeg, 1, 180),
+      )
+    } else {
+      lineGeometry = new THREE.WireframeGeometry(mesh.geometry)
+    }
+    const rawPositions = extractLinePositions(lineGeometry)
+    if (!rawPositions) return null
+    return makeEdgeLines(rawPositions, options)
+  } finally {
+    lineGeometry?.dispose()
+    merged?.dispose()
+  }
+}
+
+function createCadSilhouetteOverlay(mesh: THREE.Mesh, colorHex: string): THREE.Mesh {
+  const overlay = new THREE.Mesh(
+    mesh.geometry.clone(),
+    new THREE.MeshBasicMaterial({
+      color: new THREE.Color(colorHex),
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: true,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  )
+  // Slightly inflate to expose only the contour, similar to CAD viewport silhouettes.
+  overlay.scale.setScalar(1.01)
+  overlay.renderOrder = 2
+  overlay.userData.__itemCardCadSilhouette = true
+  return overlay
+}
+
+function applyLightSetup(ctx: SceneContext, setup: LightSetup) {
+  ctx.ambientLight.intensity = THREE.MathUtils.clamp(setup.ambient, 0, 2.5)
+  ctx.keyLight.intensity = THREE.MathUtils.clamp(setup.key, 0, 2.5)
+  ctx.fillLight.intensity = THREE.MathUtils.clamp(setup.fill, 0, 2.5)
 }
 
 function createScene(canvas: HTMLCanvasElement): SceneContext {
@@ -213,7 +367,8 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
   const modelRoot = new THREE.Group()
   scene.add(modelRoot)
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.95))
+  const ambientLight = new THREE.AmbientLight(0xffffff, DEFAULT_LIGHT_SETUP.ambient)
+  scene.add(ambientLight)
   const keyLight = new THREE.DirectionalLight(0xffffff, 0.8)
   keyLight.position.set(-220, 340, 260)
   scene.add(keyLight)
@@ -237,6 +392,9 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
     scene,
     camera,
     modelRoot,
+    ambientLight,
+    keyLight,
+    fillLight,
     dispose: () => {
       window.removeEventListener("resize", resize)
       disposeObjectResources(modelRoot)
@@ -364,42 +522,18 @@ async function renderModelToScene(
         obj.material = applyTint(obj.material)
       }
 
-      if (modelOptions.edgeEnabled) {
+      if (modelOptions.edgeMode !== "none") {
         try {
-          const merged = mergeVertices(obj.geometry.clone(), 1e-4)
-          const hardEdges = new THREE.EdgesGeometry(merged, 68)
-          merged.dispose()
-          const positions = hardEdges.attributes.position
-          const raw = positions?.array as ArrayLike<number> | undefined
-          let valid = Boolean(raw && raw.length >= 6 && raw.length % 6 === 0)
-          if (valid && raw) {
-            for (let i = 0; i < raw.length; i++) {
-              if (!Number.isFinite(raw[i] ?? NaN)) {
-                valid = false
-                break
-              }
-            }
+          const edgeLines = createMeshEdgeOverlay(obj, {
+            mode: modelOptions.edgeMode,
+            colorHex: modelOptions.edgeColorHex,
+            widthPx: modelOptions.edgeWidthPx,
+            hardEdgeThresholdDeg: modelOptions.hardEdgeThresholdDeg,
+          })
+          if (edgeLines) obj.add(edgeLines)
+          if (modelOptions.edgeMode === "cad") {
+            obj.add(createCadSilhouetteOverlay(obj, modelOptions.edgeColorHex))
           }
-          if (valid && raw) {
-            const edgeGeometry = new LineSegmentsGeometry().setPositions(
-              new Float32Array(raw as ArrayLike<number>),
-            )
-            const edgeMaterial = new LineMaterial({
-              color: new THREE.Color(modelOptions.edgeColorHex),
-              linewidth: THREE.MathUtils.clamp(modelOptions.edgeWidthPx, 0.5, 6),
-              transparent: true,
-              opacity: 0.95,
-              depthTest: true,
-              depthWrite: false,
-            toneMapped: false,
-            })
-            const edgeLines = new LineSegments2(edgeGeometry, edgeMaterial)
-            edgeLines.userData.__itemCardEdge = true
-            edgeLines.renderOrder = 3
-            edgeLines.frustumCulled = false
-            obj.add(edgeLines)
-          }
-          hardEdges.dispose()
         } catch {
           // Skip problematic mesh edge generation to avoid breaking whole render.
         }
@@ -484,10 +618,16 @@ export default function ItemCardTool() {
   const [fillRatio, setFillRatio] = useState(1)
   const [modelColorHex, setModelColorHex] = useState("#FFFFFF")
   const [modelColorInput, setModelColorInput] = useState("#FFFFFF")
-  const [edgeEnabled, setEdgeEnabled] = useState(true)
-  const [edgeColorHex, setEdgeColorHex] = useState("#0F172A")
-  const [edgeColorInput, setEdgeColorInput] = useState("#0F172A")
-  const [edgeWidthPx, setEdgeWidthPx] = useState(1.8)
+  const [edgePreset, setEdgePreset] = useState<EdgePresetId>(DEFAULT_EDGE_PRESET)
+  const [edgeMode, setEdgeMode] = useState<EdgeRenderMode>(DEFAULT_EDGE_SETUP.mode)
+  const [edgeColorHex, setEdgeColorHex] = useState(DEFAULT_EDGE_SETUP.colorHex)
+  const [edgeColorInput, setEdgeColorInput] = useState(DEFAULT_EDGE_SETUP.colorHex)
+  const [edgeWidthPx, setEdgeWidthPx] = useState(DEFAULT_EDGE_SETUP.widthPx)
+  const [hardEdgeThresholdDeg, setHardEdgeThresholdDeg] = useState(DEFAULT_EDGE_SETUP.hardEdgeThresholdDeg)
+  const [lightPreset, setLightPreset] = useState<LightPresetId>(DEFAULT_LIGHT_PRESET)
+  const [ambientLightIntensity, setAmbientLightIntensity] = useState(DEFAULT_LIGHT_SETUP.ambient)
+  const [keyLightIntensity, setKeyLightIntensity] = useState(DEFAULT_LIGHT_SETUP.key)
+  const [fillLightIntensity, setFillLightIntensity] = useState(DEFAULT_LIGHT_SETUP.fill)
   const [compositionOffsetX, setCompositionOffsetX] = useState(0)
   const [compositionOffsetY, setCompositionOffsetY] = useState(0)
 
@@ -497,11 +637,12 @@ export default function ItemCardTool() {
       modelRotationDeg: [rotX, rotY, rotZ],
       fillRatio,
       colorHex: modelColorHex,
-      edgeEnabled,
+      edgeMode,
       edgeColorHex,
       edgeWidthPx,
+      hardEdgeThresholdDeg,
     }),
-    [rotX, rotY, rotZ, fillRatio, modelColorHex, edgeEnabled, edgeColorHex, edgeWidthPx],
+    [rotX, rotY, rotZ, fillRatio, modelColorHex, edgeMode, edgeColorHex, edgeWidthPx, hardEdgeThresholdDeg],
   )
   const cameraRenderOptions = useMemo<CameraRenderOptions>(
     () => ({
@@ -510,6 +651,14 @@ export default function ItemCardTool() {
       compositionOffsetY,
     }),
     [povX, povY, povZ, compositionOffsetX, compositionOffsetY],
+  )
+  const lightSetup = useMemo<LightSetup>(
+    () => ({
+      ambient: ambientLightIntensity,
+      key: keyLightIntensity,
+      fill: fillLightIntensity,
+    }),
+    [ambientLightIntensity, fillLightIntensity, keyLightIntensity],
   )
   const buildExportMetadata = useCallback((entry: ModelEntry) => ({
     [`${METADATA_PREFIX}.modelPath`]: typeof entry.source === "string" ? normalizePath(entry.source) : entry.source.name,
@@ -529,11 +678,18 @@ export default function ItemCardTool() {
     [`${METADATA_PREFIX}.compositionAppliedOffsetY`]: String(num2(BASE_COMPOSITION_OFFSET_Y + compositionOffsetY)),
     [`${METADATA_PREFIX}.fillRatio`]: String(num2(fillRatio)),
     [`${METADATA_PREFIX}.modelColorHex`]: modelColorHex,
-    [`${METADATA_PREFIX}.edgeEnabled`]: String(edgeEnabled),
+    [`${METADATA_PREFIX}.edgeEnabled`]: String(edgeMode !== "none"),
+    [`${METADATA_PREFIX}.edgePreset`]: edgePreset,
+    [`${METADATA_PREFIX}.edgeMode`]: edgeMode,
     [`${METADATA_PREFIX}.edgeColorHex`]: edgeColorHex,
     [`${METADATA_PREFIX}.edgeWidthPx`]: String(num2(edgeWidthPx)),
+    [`${METADATA_PREFIX}.hardEdgeThresholdDeg`]: String(num2(hardEdgeThresholdDeg)),
+    [`${METADATA_PREFIX}.lightPreset`]: lightPreset,
+    [`${METADATA_PREFIX}.lightAmbient`]: String(num2(ambientLightIntensity)),
+    [`${METADATA_PREFIX}.lightKey`]: String(num2(keyLightIntensity)),
+    [`${METADATA_PREFIX}.lightFill`]: String(num2(fillLightIntensity)),
     [`${METADATA_PREFIX}.exportedAt`]: new Date().toISOString(),
-  }), [compositionOffsetX, compositionOffsetY, edgeColorHex, edgeEnabled, edgeWidthPx, exportHeight, exportWidth, fillRatio, modelColorHex, povX, povY, povZ, rotX, rotY, rotZ])
+  }), [ambientLightIntensity, compositionOffsetX, compositionOffsetY, edgeColorHex, edgeMode, edgePreset, edgeWidthPx, exportHeight, exportWidth, fillLightIntensity, fillRatio, hardEdgeThresholdDeg, keyLightIntensity, lightPreset, modelColorHex, povX, povY, povZ, rotX, rotY, rotZ])
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -567,6 +723,31 @@ export default function ItemCardTool() {
     if (!sceneRef.current) return
     applyCameraPose(sceneRef.current, cameraRenderOptions)
   }, [cameraRenderOptions])
+
+  useEffect(() => {
+    if (lightPreset === "custom") return
+    const preset = LIGHT_PRESETS[lightPreset]
+    setAmbientLightIntensity(preset.values.ambient)
+    setKeyLightIntensity(preset.values.key)
+    setFillLightIntensity(preset.values.fill)
+  }, [lightPreset])
+
+  useEffect(() => {
+    if (edgePreset === "custom") return
+    const preset = EDGE_PRESETS[edgePreset]
+    setEdgeMode(preset.mode)
+    setEdgeColorHex(preset.colorHex)
+    setEdgeColorInput(preset.colorHex)
+    setEdgeWidthPx(preset.widthPx)
+    setHardEdgeThresholdDeg(preset.hardEdgeThresholdDeg)
+  }, [edgePreset])
+
+  useEffect(() => {
+    const scene = sceneRef.current
+    if (!scene) return
+    applyLightSetup(scene, lightSetup)
+    scene.renderer.render(scene.scene, scene.camera)
+  }, [lightSetup])
 
   const withExportSize = useCallback(async <T,>(run: () => Promise<T>): Promise<T | undefined> => {
     const scene = sceneRef.current
@@ -764,6 +945,7 @@ export default function ItemCardTool() {
       setEdgeColorInput(edgeColorHex)
       return
     }
+    setEdgePreset("custom")
     setEdgeColorHex(normalized)
     if (edgeColorInput !== normalized) setEdgeColorInput(normalized)
   }, [edgeColorHex, edgeColorInput])
@@ -1012,6 +1194,65 @@ export default function ItemCardTool() {
           />
 
           <label className="mt-3 block text-xs text-white/80">
+            光照预设
+            <select
+              value={lightPreset}
+              onChange={(e) => setLightPreset(e.target.value as LightPresetId)}
+              className="mt-1 w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs outline-none focus:border-white/40"
+            >
+              <option value="balanced">{LIGHT_PRESETS.balanced.label}</option>
+              <option value="highContrast">{LIGHT_PRESETS.highContrast.label}</option>
+              <option value="softFill">{LIGHT_PRESETS.softFill.label}</option>
+              <option value="custom">自定义</option>
+            </select>
+          </label>
+          <label className="mt-2 block text-xs text-white/80">
+            环境光强度（{ambientLightIntensity.toFixed(2)}）
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={2.5}
+            step={0.05}
+            value={ambientLightIntensity}
+            onChange={(e) => {
+              setLightPreset("custom")
+              setAmbientLightIntensity(Number(e.target.value))
+            }}
+            className="mt-1 w-full"
+          />
+          <label className="mt-2 block text-xs text-white/80">
+            主光强度（{keyLightIntensity.toFixed(2)}）
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={2.5}
+            step={0.05}
+            value={keyLightIntensity}
+            onChange={(e) => {
+              setLightPreset("custom")
+              setKeyLightIntensity(Number(e.target.value))
+            }}
+            className="mt-1 w-full"
+          />
+          <label className="mt-2 block text-xs text-white/80">
+            补光强度（{fillLightIntensity.toFixed(2)}）
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={2.5}
+            step={0.05}
+            value={fillLightIntensity}
+            onChange={(e) => {
+              setLightPreset("custom")
+              setFillLightIntensity(Number(e.target.value))
+            }}
+            className="mt-1 w-full"
+          />
+
+          <label className="mt-3 block text-xs text-white/80">
             模型颜色（HEX）
             <div className="mt-1 flex gap-2">
               <input
@@ -1036,14 +1277,54 @@ export default function ItemCardTool() {
             </div>
           </label>
 
-          <label className="mt-3 flex items-center gap-2 text-xs text-white/80">
-            <input
-              type="checkbox"
-              checked={edgeEnabled}
-              onChange={(e) => setEdgeEnabled(e.target.checked)}
-            />
-            渲染边线
+          <label className="mt-3 block text-xs text-white/80">
+            描边预设
+            <select
+              value={edgePreset}
+              onChange={(e) => setEdgePreset(e.target.value as EdgePresetId)}
+              className="mt-1 w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs outline-none focus:border-white/40"
+            >
+              <option value="productOutline">{EDGE_PRESETS.productOutline.label}</option>
+              <option value="structure">{EDGE_PRESETS.structure.label}</option>
+              <option value="technical">{EDGE_PRESETS.technical.label}</option>
+              <option value="custom">自定义</option>
+            </select>
           </label>
+          <label className="mt-2 block text-xs text-white/80">
+            描边模式
+            <select
+              value={edgeMode}
+              onChange={(e) => {
+                setEdgePreset("custom")
+                setEdgeMode(e.target.value as EdgeRenderMode)
+              }}
+              className="mt-1 w-full rounded-md border border-white/20 bg-black/35 px-2 py-2 text-xs outline-none focus:border-white/40"
+            >
+              <option value="none">关闭</option>
+              <option value="hardEdges">轮廓硬边（默认）</option>
+              <option value="wireframe">框架线（Wireframe）</option>
+              <option value="cad">建模线（CAD）</option>
+            </select>
+          </label>
+          {edgeMode === "hardEdges" && (
+            <>
+              <label className="mt-2 block text-xs text-white/80">
+                硬边阈值（{hardEdgeThresholdDeg.toFixed(0)}°）
+              </label>
+              <input
+                type="range"
+                min={1}
+                max={180}
+                step={1}
+                value={hardEdgeThresholdDeg}
+                onChange={(e) => {
+                  setEdgePreset("custom")
+                  setHardEdgeThresholdDeg(Number(e.target.value))
+                }}
+                className="mt-1 w-full"
+              />
+            </>
+          )}
           <label className="mt-2 block text-xs text-white/80">
             边线颜色（HEX）
             <div className="mt-1 flex gap-2">
@@ -1060,6 +1341,7 @@ export default function ItemCardTool() {
                 value={edgeColorHex}
                 onChange={(e) => {
                   const next = e.target.value.toUpperCase()
+                  setEdgePreset("custom")
                   setEdgeColorHex(next)
                   setEdgeColorInput(next)
                 }}
@@ -1077,7 +1359,10 @@ export default function ItemCardTool() {
             max={6}
             step={0.1}
             value={edgeWidthPx}
-            onChange={(e) => setEdgeWidthPx(Number(e.target.value))}
+            onChange={(e) => {
+              setEdgePreset("custom")
+              setEdgeWidthPx(Number(e.target.value))
+            }}
             className="mt-1 w-full"
           />
 

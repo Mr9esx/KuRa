@@ -10,6 +10,10 @@ async function resolveEntry() {
     const { default: ItemCardTool } = await import("@/tools/item-card-tool")
     return ItemCardTool
   }
+  if (window.location.pathname === "/tools/item-card-r3f") {
+    const { default: ItemCardR3FTool } = await import("@/tools/item-card-r3f-tool")
+    return ItemCardR3FTool
+  }
   const { default: App } = await import("./App")
   return App
 }

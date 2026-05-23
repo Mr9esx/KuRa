@@ -12,9 +12,9 @@ import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
 import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
-import { getCatalogItemDisplayName, type BlockCatalogItem, type Preset } from "@/types/catalog"
+import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, Upload, Download, Layers, CircleHelp, Maximize, Minimize, AlertTriangle } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, Maximize, Minimize, AlertTriangle } from "lucide-react"
 import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -37,7 +37,7 @@ import { ViewCube, cameraTweenRef } from "./ViewCube"
 
 function getItemNameBySku(sku: string): string {
   const item = findItemBySku(sku)
-  return item ? getCatalogItemDisplayName(item) : sku
+  return item?.display_name ?? sku
 }
 
 interface ShoppingListItem {
@@ -140,7 +140,7 @@ function createShoppingWorkbook(
   const metaRows = [
     { 字段: "导出时间", 值: new Date().toISOString() },
     { 字段: "框体 SKU", 值: block.sku },
-    { 字段: "框体名称", 值: block.name },
+    { 字段: "框体名称", 值: block.display_name },
     { 字段: "总放置数", 值: String(placements.length) },
     { 字段: "SKU 种类数", 值: String(shoppingList.length) },
   ]
@@ -371,6 +371,11 @@ function Scene({
   const selectedItem = activeSku ? findItemBySku(activeSku) : undefined
   const inPlacementMode = mobile && !!selectedSku
   const controlsEnabled = !dragging && !draggingPlacementId && !inPlacementMode
+  const previewLight = {
+    ambient: 1,
+    key: 1,
+    fill: 1,
+  }
 
   const deg = (d: number) => (d * Math.PI) / 180
 
@@ -396,9 +401,9 @@ function Scene({
     <>
       <CameraAnimator />
 
-      <ambientLight intensity={isDark ? 0.45 : 0.65} />
-      <directionalLight position={[200, 400, 150]} intensity={isDark ? 0.7 : 0.85} />
-      <directionalLight position={[-100, 200, -200]} intensity={0.3} />
+      <ambientLight intensity={previewLight.ambient} />
+      <directionalLight position={[200, 400, 150]} intensity={previewLight.key} />
+      <directionalLight position={[-100, 200, -200]} intensity={previewLight.fill} />
 
       <OrbitControls
         makeDefault
@@ -648,7 +653,7 @@ function MobileTopBar() {
               />
             }
           >
-            <CircleHelp className="size-[18px]" />
+            <CircleHelp className="size-4" strokeWidth={2.2} />
           </TooltipTrigger>
           <TooltipContent>功能引导</TooltipContent>
         </Tooltip>
@@ -662,7 +667,11 @@ function MobileTopBar() {
                 />
               }
             >
-              {isFullscreen ? <Minimize className="size-[18px]" /> : <Maximize className="size-[18px]" />}
+              {isFullscreen ? (
+                <Minimize className="size-4" strokeWidth={2.2} />
+              ) : (
+                <Maximize className="size-4" strokeWidth={2.2} />
+              )}
             </TooltipTrigger>
             <TooltipContent>{isFullscreen ? "退出全屏" : "全屏"}</TooltipContent>
           </Tooltip>
@@ -680,7 +689,7 @@ function MobileTopBar() {
               />
             }
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path stroke="none" d="M0 0h24v24H0z" fill="none" />
               <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
               <path d="M12 3l0 18" />
@@ -703,7 +712,7 @@ function MobileTopBar() {
               />
             }
           >
-            <img src="/xiaohongshu.svg" alt="小红书" className="size-[18px]" />
+            <img src="/xiaohongshu.svg" alt="小红书" className="size-4" />
           </HoverCardTrigger>
           <HoverCardContent side="bottom" align="end">
             <div className="flex flex-col gap-2">
@@ -828,7 +837,7 @@ export function MobileActionBar() {
         <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
             <NavigationMenuTrigger id="tour-m-materials" className={iconTrigger} aria-label="材质">
-              <Pipette className="size-4" strokeWidth={1.75} />
+              <Pipette className="size-4" strokeWidth={2.2} />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <div className="flex flex-col gap-2 p-2">
@@ -865,11 +874,12 @@ export function MobileActionBar() {
           </NavigationMenuItem>
 
           <NavigationMenuItem>
-            <NavigationMenuTrigger id="tour-m-export" className={iconTrigger} aria-label="导出">
-              <Upload className="size-4" strokeWidth={1.75} />
+            <NavigationMenuTrigger id="tour-m-export" className={iconTrigger} aria-label="导入导出">
+              <ArrowUpDown className="size-4" strokeWidth={2.2} />
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <div className="flex min-w-[180px] flex-col gap-1 p-2">
+                <div className="px-2.5 py-1 text-xs font-semibold text-muted-foreground">导出</div>
                 <button
                   onClick={() => openExportPreview("model")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -888,19 +898,16 @@ export function MobileActionBar() {
                 >
                   全部导出（ZIP）
                 </button>
+                <div className="my-1 h-px bg-border" />
+                <div className="px-2.5 py-1 text-xs font-semibold text-muted-foreground">导入</div>
+                <button
+                  onClick={handleOpenImportPicker}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  导入布局（JSON）
+                </button>
               </div>
             </NavigationMenuContent>
-          </NavigationMenuItem>
-          <NavigationMenuItem>
-            <NavigationMenuTrigger
-              id="tour-m-import"
-              onClick={handleOpenImportPicker}
-              className={iconTrigger}
-              aria-label="导入"
-              title="导入布局（JSON）"
-            >
-              <Download className="size-4" strokeWidth={1.75} />
-            </NavigationMenuTrigger>
           </NavigationMenuItem>
         </NavigationMenuList>
       </NavigationMenu>
@@ -915,7 +922,7 @@ export function MobileActionBar() {
         <NavigationMenuList className="gap-0">
           <NavigationMenuItem>
             <NavigationMenuTrigger id="tour-m-presets" className={iconTrigger} aria-label="套装">
-              <Layers className="size-4" strokeWidth={1.75} />
+              <Layers className="size-4" strokeWidth={2.2} />
             </NavigationMenuTrigger>
             <NavigationMenuContent className="p-1">
               <PresetSelector
@@ -936,7 +943,7 @@ export function MobileActionBar() {
         className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
         aria-label="删除选中"
       >
-        <Trash2 className="size-4" strokeWidth={1.75} />
+        <Trash2 className="size-4" strokeWidth={2.2} />
       </button>
       <button
         id="tour-m-clear-btn"
@@ -945,7 +952,7 @@ export function MobileActionBar() {
         className="inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
         aria-label="清空"
       >
-        <Eraser className="size-4" strokeWidth={1.75} />
+        <Eraser className="size-4" strokeWidth={2.2} />
       </button>
 
       <PresetDialog
@@ -1262,7 +1269,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
             title="删除选中"
             aria-label="删除选中"
           >
-            <Trash2 className="size-4" strokeWidth={1.75} />
+            <Trash2 className="size-4" strokeWidth={2.2} />
             删除
           </Button>
           <Button
@@ -1273,7 +1280,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
             disabled={count === 0}
             className="h-8 px-2.5 text-xs text-foreground hover:bg-accent hover:text-foreground data-[disabled]:text-muted-foreground"
           >
-            <Eraser className="size-4" strokeWidth={1.75} />
+            <Eraser className="size-4" strokeWidth={2.2} />
             清空
           </Button>
         </div>
@@ -1711,7 +1718,7 @@ function ExportPreviewDialog({
             <div className="rounded-lg border border-border">
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span className="text-xs font-medium">框体</span>
-                <span className="text-xs text-muted-foreground">{block.name}</span>
+                <span className="text-xs text-muted-foreground">{block.display_name}</span>
               </div>
               <div className="px-3 py-2">
                 <div className="mb-1.5 flex items-center justify-between">
@@ -1767,7 +1774,7 @@ function ViewportHUD() {
   return (
     <div className="pointer-events-none absolute bottom-3 left-3">
       <div className="rounded-lg bg-white/80 px-3 py-2 text-xs backdrop-blur-sm dark:bg-black/60">
-        <div className="font-medium text-foreground">{block.name}</div>
+        <div className="font-medium text-foreground">{block.display_name}</div>
         <div className="text-muted-foreground">
           {block.innerSize[0]}×{block.innerSize[1]}mm · Cell {usedCells}/
           {totalCells}

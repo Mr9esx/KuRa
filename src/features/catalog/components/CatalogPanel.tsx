@@ -8,7 +8,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
-import { getCatalogItemDisplayName, type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
+import { type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
 import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
@@ -496,7 +496,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         {imageSrc ? (
                           <img
                             src={imageSrc}
-                            alt={getCatalogItemDisplayName(item)}
+                            alt={item.display_name}
                             className="h-full w-full rounded-md object-contain"
                             loading="lazy"
                           />
@@ -516,7 +516,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         )}
                       </div>
                       <div className="text-[11px] font-medium leading-tight">
-                        {getCatalogItemDisplayName(item)}
+                        {item.display_name}
                       </div>
                       {item.desc ? (
                         <div className="mt-0.5 min-h-[28px] line-clamp-2 text-[10px] leading-[1.35] text-muted-foreground/90">
@@ -567,12 +567,12 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       <div className="mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
                         <img
                           src={imageSrc}
-                          alt={b.name}
+                            alt={b.display_name}
                           className="h-full w-full rounded-md object-contain"
                           loading="lazy"
                         />
                       </div>
-                      <div className="text-[11px] font-medium leading-tight">{b.name}</div>
+                      <div className="text-[11px] font-medium leading-tight">{b.display_name}</div>
                       <div className="mt-0.5 text-[10px] text-muted-foreground">
                         {b.cellGrid[0]}×{b.cellGrid[1]}
                       </div>
@@ -680,12 +680,12 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   <div className="mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
                     <img
                       src={imageSrc}
-                      alt={b.name}
+                      alt={b.display_name}
                       className="h-full w-full rounded-md object-contain"
                       loading="lazy"
                     />
                   </div>
-                  <div className="line-clamp-1 text-[11px] font-medium leading-tight">{b.name}</div>
+                  <div className="line-clamp-1 text-[11px] font-medium leading-tight">{b.display_name}</div>
                   <div className="mt-0.5 text-[10px] text-muted-foreground">
                     {b.cellGrid[0]}×{b.cellGrid[1]} · {b.innerSize[0]}×{b.innerSize[1]}mm
                   </div>
@@ -774,7 +774,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                     {imageSrc ? (
                       <img
                         src={imageSrc}
-                        alt={getCatalogItemDisplayName(item)}
+                        alt={item.display_name}
                         className="h-full w-full rounded-md object-contain"
                         loading="lazy"
                       />
@@ -794,7 +794,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                     )}
                   </div>
                   <div className="text-xs font-medium leading-tight">
-                    {getCatalogItemDisplayName(item)}
+                    {item.display_name}
                   </div>
                   {item.desc ? (
                     <div className="mt-0.5 min-h-[28px] line-clamp-2 text-[10px] leading-tight text-muted-foreground/90">

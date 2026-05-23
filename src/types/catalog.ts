@@ -43,7 +43,3 @@ export interface Preset {
   blockSku: string
   items: PresetPlacement[]
 }
-
-export function getCatalogItemDisplayName(item: Pick<CatalogItem, "display_name" | "display" | "sku_name" | "name" | "sku">): string {
-  return item.display_name ?? item.display ?? item.sku_name ?? item.name ?? item.sku
-}

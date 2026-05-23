@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "images:compress": "node scripts/compress-images.mjs",
+    "images:compress:dry": "node scripts/compress-images.mjs --dry-run",
+    "images:compress:items": "node scripts/compress-images.mjs --dir=public/images/items",
+    "images:compress:hq": "node scripts/compress-images.mjs --max-size=1024 --png-colors=256 --png-dither=0.8",
+    "images:compress:help": "node scripts/compress-images.mjs --help"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -42,6 +47,7 @@
     "@types/three": "^0.184.1",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.2",
+    "sharp": "^0.34.4",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
