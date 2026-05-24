@@ -31,7 +31,7 @@ tar -xzf "${ARCHIVE_PATH}" -C "${DEPLOY_PATH}"
 cat > /etc/nginx/conf.d/${DOMAIN}.conf <<EOF
 server {
   listen 80;
-  server_name ${DOMAIN} www.${DOMAIN};
+  server_name ${DOMAIN} kura.${DOMAIN};
 
   root ${DEPLOY_PATH}/dist;
   index index.html;

@@ -51,6 +51,7 @@ jobs:
 
             DEPLOY_PATH="/var/www/miaoplus.com"
             DOMAIN="miaoplus.com"
+            APP_SUBDOMAIN="kura.${DOMAIN}"
             EMAIL="mr9esx@gmail.com"
 
             # Install nginx if not present
@@ -79,7 +80,7 @@ jobs:
               cat > /etc/nginx/conf.d/${DOMAIN}.conf <<'NGINX'
             server {
               listen 80;
-              server_name miaoplus.com risu.miaoplus.com;
+              server_name miaoplus.com kura.miaoplus.com;
 
               root /var/www/miaoplus.com/dist;
               index index.html;
@@ -110,20 +111,20 @@ jobs:
               fi
 
               certbot --nginx -n --agree-tos --email "${EMAIL}" \
-                -d "${DOMAIN}" -d "risu.${DOMAIN}"
+                -d "${DOMAIN}" -d "${APP_SUBDOMAIN}"
 
             else
               # Certificate already exists, write full HTTPS config
               cat > /etc/nginx/conf.d/${DOMAIN}.conf <<'NGINX'
             server {
               listen 80;
-              server_name miaoplus.com risu.miaoplus.com;
+              server_name miaoplus.com kura.miaoplus.com;
               return 301 https://$host$request_uri;
             }
 
             server {
               listen 443 ssl;
-              server_name miaoplus.com risu.miaoplus.com;
+              server_name miaoplus.com kura.miaoplus.com;
 
               ssl_certificate /etc/letsencrypt/live/miaoplus.com/fullchain.pem;
               ssl_certificate_key /etc/letsencrypt/live/miaoplus.com/privkey.pem;

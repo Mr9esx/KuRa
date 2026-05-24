@@ -43,7 +43,7 @@ cat ~/.ssh/deploy_key
 
 - 网站目录：`/var/www/miaoplus.com/dist`
 - Nginx 配置：`/etc/nginx/conf.d/miaoplus.com.conf`
-- 站点域名：`miaoplus.com`、`www.miaoplus.com`
+- 站点域名：`miaoplus.com`、`kura.miaoplus.com`
 
 ## 4. 手动兜底部署（可选）
 
@@ -62,6 +62,6 @@ Nginx 配置模板见：`deploy/nginx/miaoplus.com.conf`
 1. 本地先确认构建通过：`npm run build`
 2. 提交并 push 到 `release`
 3. 在 GitHub Actions 查看 `Release Deploy` 运行结果
-4. 浏览器访问 `http://miaoplus.com` 验证
+4. 浏览器访问 `https://kura.miaoplus.com` 验证
 
 > 说明：当前配置是 HTTP（80端口）。如需 HTTPS，可继续接入 certbot 并自动续期。
