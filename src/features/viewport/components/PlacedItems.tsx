@@ -167,18 +167,6 @@ export function PlacedItems({
   const selectedCatalogSku = useEditorStore((s) => s.selectedCatalogSku)
   const [innerW, innerD] = block.innerSize
   const [cols, rows] = block.cellGrid
-  const clippingPlanes = useMemo(() => {
-    const minX = -innerW / 2 + BLOCK_WALL_CLEARANCE
-    const maxX = innerW / 2 - BLOCK_WALL_CLEARANCE
-    const minZ = -innerD / 2 + BLOCK_WALL_CLEARANCE
-    const maxZ = innerD / 2 - BLOCK_WALL_CLEARANCE
-    return [
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), -minX),
-      new THREE.Plane(new THREE.Vector3(-1, 0, 0), maxX),
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), -minZ),
-      new THREE.Plane(new THREE.Vector3(0, 0, -1), maxZ),
-    ]
-  }, [innerW, innerD])
 
   const toCellFromRay = (ray: THREE.Ray): [number, number] | null => {
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2)

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react"
 import * as THREE from "three"
-import { GizmoHelper } from "@react-three/drei"
+import { GizmoHelper } from "@react-three/drei/core/GizmoHelper"
 import { ThreeEvent } from "@react-three/fiber"
 
 // Shared ref — the main scene registers a tween function here

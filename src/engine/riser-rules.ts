@@ -38,7 +38,6 @@ export function validateRiserLayer(
     return { valid: false, reason: "同层增高件必须等高" }
   }
 
-  const [itemCol, itemRow] = placement.cell
   const [itemW, itemH] = placement.gridSize
 
   const neededCells = new Set<string>()
@@ -90,8 +89,8 @@ export function validateRiserStack(
   }
 
   // R5 + R6: each layer must fully cover and be internally valid
-  for (let i = 0; i < placement.risers.length; i++) {
-    const result = validateRiserLayer(placement.risers[i], placement)
+  for (const [i, layer] of placement.risers.entries()) {
+    const result = validateRiserLayer(layer, placement)
     if (!result.valid) {
       return { valid: false, reason: `第 ${i + 1} 层: ${result.reason}` }
     }
@@ -137,7 +136,7 @@ export function getAffectedPlacements(
  * Pieces are placed in relative coordinates (0-based from item's origin).
  */
 export function autoFillRiserPieces(
-  riserSku: string,
+  _riserSku: string,
   riserGridSize: [number, number],
   itemGridSize: [number, number],
 ): { cell: [number, number]; gridSize: [number, number] }[] {

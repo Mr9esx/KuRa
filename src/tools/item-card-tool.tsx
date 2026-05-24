@@ -8,6 +8,7 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js"
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js"
 import { METADATA_PREFIX } from "@/config/brand"
+import { PREVIEW_LIGHT, PREVIEW_SURFACE } from "@/config/preview-rendering"
 
 interface ModelEntry {
   id: string
@@ -43,7 +44,7 @@ type LightPresetId = "balanced" | "highContrast" | "softFill" | "custom"
 const LIGHT_PRESETS: Record<Exclude<LightPresetId, "custom">, { label: string; values: LightSetup }> = {
   balanced: {
     label: "均衡（默认）",
-    values: { ambient: 0.95, key: 0.8, fill: 0.45 },
+    values: { ambient: PREVIEW_LIGHT.ambient, key: PREVIEW_LIGHT.key, fill: PREVIEW_LIGHT.fill },
   },
   highContrast: {
     label: "高对比",
@@ -361,6 +362,8 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
   renderer.setSize(canvas.clientWidth, canvas.clientHeight, false)
   renderer.setClearColor(0x000000, 0)
   renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1
 
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(28, canvas.clientWidth / canvas.clientHeight, 1, 5000)
@@ -369,11 +372,11 @@ function createScene(canvas: HTMLCanvasElement): SceneContext {
 
   const ambientLight = new THREE.AmbientLight(0xffffff, DEFAULT_LIGHT_SETUP.ambient)
   scene.add(ambientLight)
-  const keyLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  keyLight.position.set(-220, 340, 260)
+  const keyLight = new THREE.DirectionalLight(0xffffff, DEFAULT_LIGHT_SETUP.key)
+  keyLight.position.set(...PREVIEW_LIGHT.keyPosition)
   scene.add(keyLight)
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.45)
-  fillLight.position.set(180, 220, -120)
+  const fillLight = new THREE.DirectionalLight(0xffffff, DEFAULT_LIGHT_SETUP.fill)
+  fillLight.position.set(...PREVIEW_LIGHT.fillPosition)
   scene.add(fillLight)
 
   const resize = () => {
@@ -494,32 +497,18 @@ async function renderModelToScene(
       obj.castShadow = false
       obj.receiveShadow = false
       const tint = new THREE.Color(modelOptions.colorHex)
-      const applyTint = (material: THREE.Material): THREE.Material => {
-        const cloned = material.clone()
-        const materialWithColor = cloned as THREE.Material & {
-          color?: THREE.Color
-          vertexColors?: boolean
-          map?: THREE.Texture | null
-          toneMapped?: boolean
-        }
-        if (materialWithColor.color instanceof THREE.Color) {
-          materialWithColor.color.copy(tint)
-          materialWithColor.needsUpdate = true
-        }
-        if (typeof materialWithColor.vertexColors === "boolean") {
-          materialWithColor.vertexColors = false
-          materialWithColor.needsUpdate = true
-        }
-        if ("map" in materialWithColor && materialWithColor.map) {
-          materialWithColor.map = null
-          materialWithColor.needsUpdate = true
-        }
-        return cloned
-      }
+      const buildUnifiedMaterial = (): THREE.MeshStandardMaterial =>
+        new THREE.MeshStandardMaterial({
+          color: tint,
+          roughness: PREVIEW_SURFACE.roughness,
+          metalness: PREVIEW_SURFACE.metalness,
+        })
       if (Array.isArray(obj.material)) {
-        obj.material = obj.material.map(applyTint)
+        obj.material.forEach((mat) => mat.dispose())
+        obj.material = obj.material.map(() => buildUnifiedMaterial())
       } else if (obj.material) {
-        obj.material = applyTint(obj.material)
+        obj.material.dispose()
+        obj.material = buildUnifiedMaterial()
       }
 
       if (modelOptions.edgeMode !== "none") {
@@ -1392,7 +1381,7 @@ export default function ItemCardTool() {
           <p className="mb-2 text-xs text-white/65">
             预览区拖动可旋转视角（左右=POV Y，上下=POV X），左侧数值会实时回填。
           </p>
-          <div className="h-[720px] overflow-hidden rounded-lg bg-[linear-gradient(45deg,#242424_25%,transparent_25%),linear-gradient(-45deg,#242424_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#242424_75%),linear-gradient(-45deg,transparent_75%,#242424_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0px]">
+          <div className="h-[720px] overflow-hidden rounded-lg bg-[#faf9f7]">
             <canvas
               ref={canvasRef}
               className="h-full w-full touch-none cursor-grab active:cursor-grabbing"

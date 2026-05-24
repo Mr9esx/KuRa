@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
-import { Canvas, useLoader, useThree } from "@react-three/fiber"
-import { Edges, OrbitControls, Outlines } from "@react-three/drei"
+import { useLoader, useThree } from "@react-three/fiber"
+import { Edges } from "@react-three/drei/core/Edges"
+import { OrbitControls } from "@react-three/drei/core/OrbitControls"
+import { Outlines } from "@react-three/drei/core/Outlines"
 import * as THREE from "three"
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
+import { PREVIEW_LIGHT, PREVIEW_SURFACE } from "@/config/preview-rendering"
+import { UnifiedPreviewCanvas } from "@/components/preview/unified-preview-canvas"
 
 interface ModelEntry {
   id: string
@@ -63,7 +67,10 @@ const EDGE_PRESETS: Record<Exclude<EdgePresetId, "custom">, EdgePreset> = {
 }
 
 const LIGHT_PRESETS: Record<Exclude<LightPresetId, "custom">, { label: string; values: LightSetup }> = {
-  balanced: { label: "均衡（默认）", values: { ambient: 0.95, key: 0.8, fill: 0.45 } },
+  balanced: {
+    label: "均衡（默认）",
+    values: { ambient: PREVIEW_LIGHT.ambient, key: PREVIEW_LIGHT.key, fill: PREVIEW_LIGHT.fill },
+  },
   highContrast: { label: "高对比", values: { ambient: 0.55, key: 1.05, fill: 0.25 } },
   softFill: { label: "柔和补光", values: { ambient: 1.1, key: 0.65, fill: 0.8 } },
 }
@@ -170,8 +177,8 @@ function PreparedModel({
           <mesh key={mesh.id} geometry={mesh.geometry} castShadow={false} receiveShadow={false}>
             <meshStandardMaterial
               color={isWireframe ? edgeColorHex : modelColorHex}
-              roughness={0.5}
-              metalness={0}
+              roughness={PREVIEW_SURFACE.roughness}
+              metalness={PREVIEW_SURFACE.metalness}
               wireframe={isWireframe}
             />
             {edgeMode === "hardEdges" && (
@@ -264,9 +271,9 @@ export default function ItemCardR3FTool() {
     <div className="min-h-screen bg-[#111] text-white">
       <div className="mx-auto flex max-w-[1200px] gap-4 p-4">
         <div className="w-[380px] shrink-0 rounded-xl border border-white/15 bg-white/5 p-4">
-          <h1 className="text-lg font-semibold">3MF Item Card（R3F + drei 实验）</h1>
+          <h1 className="text-lg font-semibold">3MF Item Card</h1>
           <p className="mt-1 text-xs text-white/70">
-            用于对照 drei 的 Edges/相机控制效果，当前只加载内置模型。
+            与主页预览共享同一套渲染组件与光照参数。
           </p>
 
           <label className="mt-3 block text-xs text-white/80">
@@ -520,16 +527,15 @@ export default function ItemCardR3FTool() {
             鼠标拖动旋转，滚轮缩放。用于对照 drei 版本描边效果。
           </p>
           <div className="h-[720px] overflow-hidden rounded-lg bg-[linear-gradient(45deg,#242424_25%,transparent_25%),linear-gradient(-45deg,#242424_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#242424_75%),linear-gradient(-45deg,transparent_75%,#242424_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0px]">
-            <Canvas
-              shadows={false}
-              dpr={[1, 2]}
-              gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
-              camera={{ fov: 28, near: 1, far: 5000 }}
+            <UnifiedPreviewCanvas
+              camera={{ fov: 28, near: 1, far: 5000, position: DEFAULT_POV }}
+              light={{
+                ambient: ambientLightIntensity,
+                key: keyLightIntensity,
+                fill: fillLightIntensity,
+              }}
             >
               <CameraRig position={DEFAULT_POV} target={DEFAULT_TARGET} />
-              <ambientLight intensity={ambientLightIntensity} />
-              <directionalLight position={[-220, 340, 260]} intensity={keyLightIntensity} />
-              <directionalLight position={[180, 220, -120]} intensity={fillLightIntensity} />
               {activeEntry && (
                 <PreparedModel
                   modelPath={activeEntry.modelPath}
@@ -547,7 +553,7 @@ export default function ItemCardR3FTool() {
                 target={new THREE.Vector3(DEFAULT_TARGET[0], DEFAULT_TARGET[1], DEFAULT_TARGET[2])}
                 enablePan={true}
               />
-            </Canvas>
+            </UnifiedPreviewCanvas>
           </div>
         </div>
       </div>

@@ -471,11 +471,14 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                 ))}
               </div>
 
-              <div id="tour-m-catalog-items" className="no-scrollbar flex-1 overflow-x-auto overscroll-contain px-4 pb-4 pt-1">
-                <div className="flex h-full gap-2">
+              <div id="tour-m-catalog-items" className="no-scrollbar flex-1 overflow-x-auto overscroll-contain pl-4 pb-4 pt-1">
+                <div className="flex h-full gap-2 pr-4">
                   {filteredItems.map((item, itemIndex) => (
                     (() => {
                       const imageSrc = getItemImageSrc(item)
+                      const heightTag = Number.isFinite(item.height)
+                        ? `高 ${(item.height / 10).toFixed(1).replace(/\.0$/, "")}cm`
+                        : null
                       return (
                     <button
                       key={item.sku}
@@ -492,7 +495,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                           : "border-border hover:border-foreground/30 hover:bg-muted/50",
                       )}
                     >
-                      <div className="mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
+                      <div className="relative mb-1.5 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
                         {imageSrc ? (
                           <img
                             src={imageSrc}
@@ -514,8 +517,13 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                             }}
                           />
                         )}
+                        {heightTag ? (
+                          <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-background/90 px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90 ring-1 ring-border/70 backdrop-blur-sm">
+                            {heightTag}
+                          </span>
+                        ) : null}
                       </div>
-                      <div className="text-[11px] font-medium leading-tight">
+                      <div className="min-w-0 text-[11px] font-medium leading-tight">
                         {item.display_name}
                       </div>
                       {item.desc ? (
@@ -755,6 +763,9 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                   const imageSrc = getItemImageSrc(item)
                   const [gridX, gridY] = getSafeGridSize(item)
                   const isFirstItem = groupIdx === 0 && itemIdx === 0
+                  const heightTag = Number.isFinite(item.height)
+                    ? `高 ${(item.height / 10).toFixed(1).replace(/\.0$/, "")}cm`
+                    : null
                   return (
                 <button
                   key={item.sku}
@@ -770,7 +781,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       : "border-border hover:border-foreground/30 hover:bg-muted/50",
                   )}
                 >
-                  <div className="mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
+                  <div className="relative mb-2 flex w-full aspect-square items-center justify-center rounded-md bg-muted/60">
                     {imageSrc ? (
                       <img
                         src={imageSrc}
@@ -792,8 +803,13 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                         }}
                       />
                     )}
+                    {heightTag ? (
+                      <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-background/90 px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90 ring-1 ring-border/70 backdrop-blur-sm">
+                        {heightTag}
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="text-xs font-medium leading-tight">
+                  <div className="min-w-0 text-xs font-medium leading-tight">
                     {item.display_name}
                   </div>
                   {item.desc ? (

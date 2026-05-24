@@ -21,7 +21,6 @@ interface RiserPieceModelProps {
   piece: RiserPiece
   layerY: number
   layerHeight: number
-  itemCell: [number, number]
   itemGridSize: [number, number]
   worldX: number
   worldZ: number
@@ -39,7 +38,6 @@ function RiserPieceModel({
   piece,
   layerY,
   layerHeight,
-  itemCell,
   itemGridSize,
   worldX,
   worldZ,
@@ -212,7 +210,6 @@ export function RiserStack({
                 piece={piece}
                 layerY={layerY}
                 layerHeight={layer.height}
-                itemCell={placement.cell}
                 itemGridSize={placement.gridSize}
                 worldX={worldX}
                 worldZ={worldZ}

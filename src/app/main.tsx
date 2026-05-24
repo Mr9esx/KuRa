@@ -7,6 +7,10 @@ document.title = APP_TAB_TITLE
 
 async function resolveEntry() {
   if (window.location.pathname === "/tools/item-card") {
+    const { default: ItemCardR3FTool } = await import("@/tools/item-card-r3f-tool")
+    return ItemCardR3FTool
+  }
+  if (window.location.pathname === "/tools/item-card-legacy") {
     const { default: ItemCardTool } = await import("@/tools/item-card-tool")
     return ItemCardTool
   }

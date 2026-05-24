@@ -1,20 +1,30 @@
-import { useRef, useEffect, useCallback, useState, useMemo, type DragEvent, type ChangeEvent } from "react"
+import { Suspense, lazy, useRef, useEffect, useCallback, useState, useMemo, type DragEvent, type ChangeEvent } from "react"
 import * as THREE from "three"
-import { Canvas, useThree, useFrame } from "@react-three/fiber"
-import { OrbitControls } from "@react-three/drei"
+import { useThree, useFrame } from "@react-three/fiber"
+import { OrbitControls } from "@react-three/drei/core/OrbitControls"
 import { Dialog } from "@base-ui/react/dialog"
 import { toast } from "sonner"
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { getMaterialColor, MATERIAL_COLORS } from "@/config/materials"
+import { UnifiedPreviewCanvas } from "@/components/preview/unified-preview-canvas"
 import { CELL_SIZE } from "@/config/catalog"
 import { findItemBySku, useCatalog } from "@/hooks/use-catalog"
 import { cn } from "@/lib/utils"
-import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE, EXPORT_PREFIX } from "@/config/brand"
+import {
+  APP_AUTHOR_NAME,
+  APP_LICENSE_NAME,
+  APP_LICENSE_URL,
+  APP_PAGE_TITLE,
+  APP_SOCIAL,
+  CUSTOM_EVENTS,
+  DATA_TRANSFER_TYPE,
+  EXPORT_PREFIX,
+} from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
 import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, Maximize, Minimize, AlertTriangle } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, Maximize, Minimize, AlertTriangle, Info } from "lucide-react"
 import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -28,12 +38,20 @@ import {
 } from "@/components/ui/navigation-menu"
 import { Button } from "@/components/ui/button"
 import { PresetDialog } from "@/features/catalog/components/PresetDialog"
-import { BlockMesh } from "./BlockMesh"
 import { CellGrid } from "./CellGrid"
-import { PlacedItems } from "./PlacedItems"
 import { GhostPreview } from "./GhostPreview"
 import { TourGhostItem } from "./TourGhostItem"
 import { ViewCube, cameraTweenRef } from "./ViewCube"
+
+const LazyBlockMesh = lazy(async () => {
+  const mod = await import("./BlockMesh")
+  return { default: mod.BlockMesh }
+})
+
+const LazyPlacedItems = lazy(async () => {
+  const mod = await import("./PlacedItems")
+  return { default: mod.PlacedItems }
+})
 
 function getItemNameBySku(sku: string): string {
   const item = findItemBySku(sku)
@@ -364,6 +382,7 @@ function Scene({
   const removePlacement = useEditorStore((s) => s.removePlacement)
   const isDark = useIsDark()
   const [draggingPlacementId, setDraggingPlacementId] = useState<string | null>(null)
+  const [showDetailedMeshes, setShowDetailedMeshes] = useState(false)
 
   const blockMat = getMaterialColor(blockColorId)
   const itemMat = getMaterialColor(itemColorId)
@@ -371,11 +390,10 @@ function Scene({
   const selectedItem = activeSku ? findItemBySku(activeSku) : undefined
   const inPlacementMode = mobile && !!selectedSku
   const controlsEnabled = !dragging && !draggingPlacementId && !inPlacementMode
-  const previewLight = {
-    ambient: 1,
-    key: 1,
-    fill: 1,
-  }
+  const orbitTargetY = Math.max(20, block.height * 0.45)
+  const [innerW, innerD] = block.innerSize
+  const placeholderOuterW = innerW + 8
+  const placeholderOuterD = innerD + 8
 
   const deg = (d: number) => (d * Math.PI) / 180
 
@@ -389,6 +407,36 @@ function Scene({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [removePlacement, selectedPlacementId])
 
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let idleId: number | null = null
+    const win = globalThis as unknown as Window & {
+      requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+
+    const onIdle: IdleRequestCallback = () => {
+      setShowDetailedMeshes(true)
+    }
+
+    if (typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(onIdle, { timeout: 500 })
+    } else {
+      timeoutId = globalThis.setTimeout(() => {
+        setShowDetailedMeshes(true)
+      }, 200)
+    }
+
+    return () => {
+      if (idleId !== null && typeof win.cancelIdleCallback === "function") {
+        win.cancelIdleCallback(idleId)
+      }
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId)
+      }
+    }
+  }, [])
+
   const handleCellClick = (col: number, row: number) => {
     if (selectedSku) {
       placeItem(col, row)
@@ -401,10 +449,6 @@ function Scene({
     <>
       <CameraAnimator />
 
-      <ambientLight intensity={previewLight.ambient} />
-      <directionalLight position={[200, 400, 150]} intensity={previewLight.key} />
-      <directionalLight position={[-100, 200, -200]} intensity={previewLight.fill} />
-
       <OrbitControls
         makeDefault
         minPolarAngle={deg(10)}
@@ -413,7 +457,7 @@ function Scene({
         maxDistance={800}
         enableDamping
         dampingFactor={0.1}
-        target={[0, 20, 0]}
+        target={[0, orbitTargetY, 0]}
         enabled={controlsEnabled}
       />
 
@@ -430,24 +474,43 @@ function Scene({
         <meshStandardMaterial color={isDark ? "#2a2a2a" : "#f0eeeb"} roughness={1} />
       </mesh>
 
-      <BlockMesh block={block} color={blockMat.hex} roughness={blockMat.roughness} />
+      {showDetailedMeshes ? (
+        <Suspense fallback={null}>
+          <LazyBlockMesh block={block} color={blockMat.hex} roughness={blockMat.roughness} />
+        </Suspense>
+      ) : (
+        <mesh position={[0, block.height / 2, 0]}>
+          <boxGeometry args={[placeholderOuterW, block.height, placeholderOuterD]} />
+          <meshStandardMaterial
+            color={blockMat.hex}
+            roughness={blockMat.roughness}
+            metalness={0}
+            transparent
+            opacity={0.3}
+          />
+        </mesh>
+      )}
       <CellGrid
         block={block}
         onCellHover={setHoveredCell}
         onCellClick={handleCellClick}
       />
-      <PlacedItems
-        block={block}
-        placements={placements}
-        color={itemMat.hex}
-        roughness={itemMat.roughness}
-        mobile={mobile}
-        selectedPlacementId={selectedPlacementId}
-        draggingPlacementId={draggingPlacementId}
-        onSelectPlacement={selectPlacement}
-        onMovePlacement={movePlacement}
-        onDragPlacementChange={setDraggingPlacementId}
-      />
+      {showDetailedMeshes && (
+        <Suspense fallback={null}>
+          <LazyPlacedItems
+            block={block}
+            placements={placements}
+            color={itemMat.hex}
+            roughness={itemMat.roughness}
+            mobile={mobile}
+            selectedPlacementId={selectedPlacementId}
+            draggingPlacementId={draggingPlacementId}
+            onSelectPlacement={selectPlacement}
+            onMovePlacement={movePlacement}
+            onDragPlacementChange={setDraggingPlacementId}
+          />
+        </Suspense>
+      )}
 
       <ViewCube mobile={mobile} />
 
@@ -632,6 +695,7 @@ function useFullscreen() {
 }
 
 function MobileTopBar() {
+  const [aboutOpen, setAboutOpen] = useState(false)
   const { isFullscreen, toggle: toggleFullscreen, supported: fullscreenSupported } = useFullscreen()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
@@ -700,6 +764,20 @@ function MobileTopBar() {
           </TooltipTrigger>
           <TooltipContent>切换主题</TooltipContent>
         </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                onClick={() => setAboutOpen(true)}
+                className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
+                aria-label="关于"
+              />
+            }
+          >
+            <Info className="size-4" strokeWidth={2.2} />
+          </TooltipTrigger>
+          <TooltipContent>关于</TooltipContent>
+        </Tooltip>
         <HoverCard>
           <HoverCardTrigger
             render={
@@ -729,6 +807,7 @@ function MobileTopBar() {
             </div>
           </HoverCardContent>
         </HoverCard>
+        <AboutLicenseDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       </div>
     </div>
   )
@@ -1038,6 +1117,7 @@ export function MobileActionBar() {
 
 function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   const [activePreset, setActivePreset] = useState<Preset | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [materialTarget, setMaterialTarget] = useState<"block" | "item">("block")
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
@@ -1260,6 +1340,16 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
       <div className="flex shrink-0 items-center gap-1">
         <div className="flex items-center gap-1.5">
           <Button
+            variant="ghost"
+            size="default"
+            onClick={() => setAboutOpen(true)}
+            className="h-8 px-2.5 text-xs text-foreground hover:bg-accent hover:text-foreground"
+            aria-label="关于"
+          >
+            <Info className="size-4" strokeWidth={2.2} />
+            关于
+          </Button>
+          <Button
             id="tour-delete-btn"
             variant="ghost"
             size="default"
@@ -1291,6 +1381,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
         open={!!activePreset}
         onOpenChange={(open) => !open && setActivePreset(null)}
       />
+      <AboutLicenseDialog open={aboutOpen} onOpenChange={setAboutOpen} />
 
       <DeleteConfirmDialog
         open={confirmDeleteOpen}
@@ -1536,25 +1627,24 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       onDrop={handleDrop}
       onDragLeave={() => setHoveredCell(null)}
     >
-      <Canvas
+      <UnifiedPreviewCanvas
         camera={{ fov: cameraFov, position: cameraPosition, near: 10, far: 1200 }}
-        gl={{ antialias: true, logarithmicDepthBuffer: true }}
-        onCreated={({ gl }) => {
-          gl.localClippingEnabled = true
-        }}
         onPointerMissed={handlePointerMissed}
       >
         <Scene previewSku={draggingSku} dragging={!!draggingSku} mobile={mobile} />
         <SceneBridge onReady={bindSceneContext} />
         <FpsTracker onUpdate={(f, m) => { setFps(f); setMem(m) }} />
-      </Canvas>
+      </UnifiedPreviewCanvas>
       <div className="pointer-events-none absolute inset-x-3 top-3">
         <ViewportToolbar mobile={mobile} />
       </div>
       <ViewportHUD />
       <div className="pointer-events-none absolute top-16 right-4 text-xs text-muted-foreground/25">
-        <div>FPS: {fps ?? "--"}</div>
-        {mem !== null && <div>Mem: {mem} MB</div>}
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <span>FPS: {fps ?? "--"}</span>
+          <span>Mem: {mem !== null ? `${mem} MB` : "--"}</span>
+          <span>{APP_PAGE_TITLE} by {APP_AUTHOR_NAME} · {APP_LICENSE_NAME}</span>
+        </div>
       </div>
     </div>
   )
@@ -1591,6 +1681,62 @@ function DeleteConfirmDialog({
               >
                 确认删除
               </button>
+            </div>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+function AboutLicenseDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-sm" />
+        <Dialog.Popup className="fixed top-1/2 left-1/2 z-[10000] flex max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-[460px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+          <div className="shrink-0 p-4 pb-0">
+            <Dialog.Title className="text-sm font-semibold">关于与许可说明</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-muted-foreground">
+              模型文件采用 {APP_LICENSE_NAME} 许可协议，可商用，但需保留署名。
+            </Dialog.Description>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-sm text-foreground/90">
+            <div className="space-y-2">
+              <p>你可以自由复制、分发、改编和商业使用模型文件。</p>
+              <p>使用时请保留以下署名信息：</p>
+              <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                <li>作者：{APP_AUTHOR_NAME}</li>
+                <li>项目：{APP_PAGE_TITLE}</li>
+                <li>许可协议：{APP_LICENSE_NAME}</li>
+              </ul>
+              <p className="text-muted-foreground">
+                推荐署名文案：基于 {APP_PAGE_TITLE} 模型，作者 {APP_AUTHOR_NAME}，协议 {APP_LICENSE_NAME}。
+              </p>
+              <p className="text-muted-foreground">
+                协议详情：
+                <a
+                  href={APP_LICENSE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-1 underline underline-offset-2"
+                >
+                  {APP_LICENSE_URL}
+                </a>
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 border-t border-border p-4">
+            <div className="flex justify-end">
+              <Dialog.Close className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted">
+                我知道了
+              </Dialog.Close>
             </div>
           </div>
         </Dialog.Popup>
