@@ -1,9 +1,10 @@
 import { Suspense, lazy, useRef, useEffect, useCallback, useState, useMemo, type DragEvent, type ChangeEvent } from "react"
 import * as THREE from "three"
-import { useThree, useFrame } from "@react-three/fiber"
+import { useThree, useFrame, useLoader } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei/core/OrbitControls"
 import { Dialog } from "@base-ui/react/dialog"
 import { toast } from "sonner"
+import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js"
 import { useEditorStore } from "@/stores/editor-store"
 import { useThemeStore } from "@/stores/theme-store"
 import { getMaterialColor, MATERIAL_COLORS } from "@/config/materials"
@@ -381,9 +382,7 @@ function Scene({
   const isDark = useIsDark()
   const [draggingPlacementId, setDraggingPlacementId] = useState<string | null>(null)
   const [showDetailedItems, setShowDetailedItems] = useState(false)
-  const [blockPreloaded, setBlockPreloaded] = useState(!block.modelPath)
   const [blockMeshReady, setBlockMeshReady] = useState(!block.modelPath)
-  const [blockLoadFailed, setBlockLoadFailed] = useState(false)
 
   const blockMat = getMaterialColor(blockColorId)
   const itemMat = getMaterialColor(itemColorId)
@@ -414,43 +413,22 @@ function Scene({
   }, [removePlacement, selectedPlacementId])
 
   useEffect(() => {
-    let cancelled = false
     if (!blockModelUrl) {
-      setBlockPreloaded(true)
       setBlockMeshReady(true)
-      setBlockLoadFailed(false)
       return
     }
 
-    setBlockPreloaded(false)
     setBlockMeshReady(false)
-    setBlockLoadFailed(false)
-
-    void fetch(blockModelUrl, { cache: "force-cache" })
-      .then((res) => {
-        if (cancelled) return
-        if (!res.ok) {
-          setBlockLoadFailed(true)
-          return
-        }
-        setBlockPreloaded(true)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setBlockLoadFailed(true)
-      })
-
-    return () => {
-      cancelled = true
-    }
+    // Use R3F loader cache to warm up without a duplicate plain fetch.
+    useLoader.preload(ThreeMFLoader, blockModelUrl)
   }, [blockModelUrl])
 
   useEffect(() => {
     onBlockLoadStateChange?.({
-      loading: !blockMeshReady && !blockLoadFailed,
-      failed: blockLoadFailed,
+      loading: !blockMeshReady,
+      failed: false,
     })
-  }, [blockMeshReady, blockLoadFailed, onBlockLoadStateChange])
+  }, [blockMeshReady, onBlockLoadStateChange])
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null
@@ -533,25 +511,12 @@ function Scene({
           </mesh>
         }
       >
-        {blockPreloaded && !blockLoadFailed ? (
-          <BlockMesh
-            block={block}
-            color={blockMat.hex}
-            roughness={blockMat.roughness}
-            onReady={() => setBlockMeshReady(true)}
-          />
-        ) : (
-          <mesh position={[0, block.height / 2, 0]}>
-            <boxGeometry args={[placeholderOuterW, block.height, placeholderOuterD]} />
-            <meshStandardMaterial
-              color={blockMat.hex}
-              roughness={blockMat.roughness}
-              metalness={0}
-              transparent
-              opacity={0.3}
-            />
-          </mesh>
-        )}
+        <BlockMesh
+          block={block}
+          color={blockMat.hex}
+          roughness={blockMat.roughness}
+          onReady={() => setBlockMeshReady(true)}
+        />
       </Suspense>
       <CellGrid
         block={block}
