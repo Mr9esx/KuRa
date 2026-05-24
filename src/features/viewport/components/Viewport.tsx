@@ -38,15 +38,11 @@ import {
 } from "@/components/ui/navigation-menu"
 import { Button } from "@/components/ui/button"
 import { PresetDialog } from "@/features/catalog/components/PresetDialog"
+import { BlockMesh } from "./BlockMesh"
 import { CellGrid } from "./CellGrid"
 import { GhostPreview } from "./GhostPreview"
 import { TourGhostItem } from "./TourGhostItem"
 import { ViewCube, cameraTweenRef } from "./ViewCube"
-
-const LazyBlockMesh = lazy(async () => {
-  const mod = await import("./BlockMesh")
-  return { default: mod.BlockMesh }
-})
 
 const LazyPlacedItems = lazy(async () => {
   const mod = await import("./PlacedItems")
@@ -382,7 +378,7 @@ function Scene({
   const removePlacement = useEditorStore((s) => s.removePlacement)
   const isDark = useIsDark()
   const [draggingPlacementId, setDraggingPlacementId] = useState<string | null>(null)
-  const [showDetailedMeshes, setShowDetailedMeshes] = useState(false)
+  const [showDetailedItems, setShowDetailedItems] = useState(false)
 
   const blockMat = getMaterialColor(blockColorId)
   const itemMat = getMaterialColor(itemColorId)
@@ -416,14 +412,14 @@ function Scene({
     }
 
     const onIdle: IdleRequestCallback = () => {
-      setShowDetailedMeshes(true)
+      setShowDetailedItems(true)
     }
 
     if (typeof win.requestIdleCallback === "function") {
       idleId = win.requestIdleCallback(onIdle, { timeout: 500 })
     } else {
       timeoutId = globalThis.setTimeout(() => {
-        setShowDetailedMeshes(true)
+        setShowDetailedItems(true)
       }, 200)
     }
 
@@ -474,11 +470,8 @@ function Scene({
         <meshStandardMaterial color={isDark ? "#2a2a2a" : "#f0eeeb"} roughness={1} />
       </mesh>
 
-      {showDetailedMeshes ? (
-        <Suspense fallback={null}>
-          <LazyBlockMesh block={block} color={blockMat.hex} roughness={blockMat.roughness} />
-        </Suspense>
-      ) : (
+      <Suspense
+        fallback={
         <mesh position={[0, block.height / 2, 0]}>
           <boxGeometry args={[placeholderOuterW, block.height, placeholderOuterD]} />
           <meshStandardMaterial
@@ -489,13 +482,16 @@ function Scene({
             opacity={0.3}
           />
         </mesh>
-      )}
+        }
+      >
+        <BlockMesh block={block} color={blockMat.hex} roughness={blockMat.roughness} />
+      </Suspense>
       <CellGrid
         block={block}
         onCellHover={setHoveredCell}
         onCellClick={handleCellClick}
       />
-      {showDetailedMeshes && (
+      {showDetailedItems && (
         <Suspense fallback={null}>
           <LazyPlacedItems
             block={block}
