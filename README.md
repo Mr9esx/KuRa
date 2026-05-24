@@ -79,7 +79,7 @@ kura/
 
 - 适用范围：仅模型与素材文件（如 `public/models`、`public/images`、相关数据文件）
 - 许可协议：`CC BY 4.0`（允许商业使用，需署名）
-- 署名要求：需明确标注作者 `mr9esx` 与项目名 `KuRa`
+- 署名要求：需明确标注作者 `Lee` 与项目名 `KuRa`
 - 源代码：不开放，保留所有权利（All Rights Reserved）
 - 许可文件：`LICENSE`
 - 署名示例：`ATTRIBUTION.md`

@@ -1,7 +1,7 @@
 export const APP_TAB_TITLE = "KuRa - 「仓」"
 export const APP_PAGE_TITLE = "KuRa"
 export const APP_PROJECT_NAME = "KuRa"
-export const APP_AUTHOR_NAME = "mr9esx"
+export const APP_AUTHOR_NAME = "Lee"
 export const APP_LICENSE_NAME = "CC BY 4.0"
 export const APP_LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/"
 

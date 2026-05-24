@@ -10,9 +10,10 @@ interface BlockMeshProps {
   block: BlockCatalogItem
   color: string
   roughness: number
+  onReady?: () => void
 }
 
-export function BlockMesh({ block, color, roughness }: BlockMeshProps) {
+export function BlockMesh({ block, color, roughness, onReady }: BlockMeshProps) {
   const modelUrl = useMemo(() => {
     const base = import.meta.env.BASE_URL
     return `${base}${block.modelPath.replace(/^\//, "")}`
@@ -86,6 +87,9 @@ export function BlockMesh({ block, color, roughness }: BlockMeshProps) {
   }, [material, model])
 
   useEffect(() => () => material.dispose(), [material])
+  useEffect(() => {
+    onReady?.()
+  }, [onReady])
 
   return (
     <group scale={scale}>

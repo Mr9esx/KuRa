@@ -358,10 +358,12 @@ function Scene({
   previewSku,
   dragging,
   mobile,
+  onBlockLoadStateChange,
 }: {
   previewSku: string | null
   dragging: boolean
   mobile?: boolean
+  onBlockLoadStateChange?: (state: { loading: boolean; failed: boolean }) => void
 }) {
   const block = useEditorStore((s) => s.block)
   const placements = useEditorStore((s) => s.placements)
@@ -379,6 +381,9 @@ function Scene({
   const isDark = useIsDark()
   const [draggingPlacementId, setDraggingPlacementId] = useState<string | null>(null)
   const [showDetailedItems, setShowDetailedItems] = useState(false)
+  const [blockPreloaded, setBlockPreloaded] = useState(!block.modelPath)
+  const [blockMeshReady, setBlockMeshReady] = useState(!block.modelPath)
+  const [blockLoadFailed, setBlockLoadFailed] = useState(false)
 
   const blockMat = getMaterialColor(blockColorId)
   const itemMat = getMaterialColor(itemColorId)
@@ -390,6 +395,11 @@ function Scene({
   const [innerW, innerD] = block.innerSize
   const placeholderOuterW = innerW + 8
   const placeholderOuterD = innerD + 8
+  const blockModelUrl = useMemo(() => {
+    if (!block.modelPath) return null
+    const base = import.meta.env.BASE_URL
+    return `${base}${block.modelPath.replace(/^\//, "")}`
+  }, [block.modelPath])
 
   const deg = (d: number) => (d * Math.PI) / 180
 
@@ -402,6 +412,45 @@ function Scene({
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [removePlacement, selectedPlacementId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!blockModelUrl) {
+      setBlockPreloaded(true)
+      setBlockMeshReady(true)
+      setBlockLoadFailed(false)
+      return
+    }
+
+    setBlockPreloaded(false)
+    setBlockMeshReady(false)
+    setBlockLoadFailed(false)
+
+    void fetch(blockModelUrl, { cache: "force-cache" })
+      .then((res) => {
+        if (cancelled) return
+        if (!res.ok) {
+          setBlockLoadFailed(true)
+          return
+        }
+        setBlockPreloaded(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setBlockLoadFailed(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [blockModelUrl])
+
+  useEffect(() => {
+    onBlockLoadStateChange?.({
+      loading: !blockMeshReady && !blockLoadFailed,
+      failed: blockLoadFailed,
+    })
+  }, [blockMeshReady, blockLoadFailed, onBlockLoadStateChange])
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null
@@ -472,19 +521,37 @@ function Scene({
 
       <Suspense
         fallback={
-        <mesh position={[0, block.height / 2, 0]}>
-          <boxGeometry args={[placeholderOuterW, block.height, placeholderOuterD]} />
-          <meshStandardMaterial
-            color={blockMat.hex}
-            roughness={blockMat.roughness}
-            metalness={0}
-            transparent
-            opacity={0.3}
-          />
-        </mesh>
+          <mesh position={[0, block.height / 2, 0]}>
+            <boxGeometry args={[placeholderOuterW, block.height, placeholderOuterD]} />
+            <meshStandardMaterial
+              color={blockMat.hex}
+              roughness={blockMat.roughness}
+              metalness={0}
+              transparent
+              opacity={0.3}
+            />
+          </mesh>
         }
       >
-        <BlockMesh block={block} color={blockMat.hex} roughness={blockMat.roughness} />
+        {blockPreloaded && !blockLoadFailed ? (
+          <BlockMesh
+            block={block}
+            color={blockMat.hex}
+            roughness={blockMat.roughness}
+            onReady={() => setBlockMeshReady(true)}
+          />
+        ) : (
+          <mesh position={[0, block.height / 2, 0]}>
+            <boxGeometry args={[placeholderOuterW, block.height, placeholderOuterD]} />
+            <meshStandardMaterial
+              color={blockMat.hex}
+              roughness={blockMat.roughness}
+              metalness={0}
+              transparent
+              opacity={0.3}
+            />
+          </mesh>
+        )}
       </Suspense>
       <CellGrid
         block={block}
@@ -1458,6 +1525,10 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
   const [mem, setMem] = useState<number | null>(null)
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
+  const [blockLoadState, setBlockLoadState] = useState<{ loading: boolean; failed: boolean }>({
+    loading: true,
+    failed: false,
+  })
   const { data: catalogData } = useCatalog()
   const applyPreset = useEditorStore((s) => s.applyPreset)
   const setHoveredCell = useEditorStore((s) => s.setHoveredCell)
@@ -1627,10 +1698,29 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         camera={{ fov: cameraFov, position: cameraPosition, near: 10, far: 1200 }}
         onPointerMissed={handlePointerMissed}
       >
-        <Scene previewSku={draggingSku} dragging={!!draggingSku} mobile={mobile} />
+        <Scene
+          previewSku={draggingSku}
+          dragging={!!draggingSku}
+          mobile={mobile}
+          onBlockLoadStateChange={setBlockLoadState}
+        />
         <SceneBridge onReady={bindSceneContext} />
         <FpsTracker onUpdate={(f, m) => { setFps(f); setMem(m) }} />
       </UnifiedPreviewCanvas>
+      {blockLoadState.loading && (
+        <div className="pointer-events-none absolute inset-0 z-[90] grid place-items-center">
+          <div className="rounded-md bg-black/35 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
+            框体加载中...
+          </div>
+        </div>
+      )}
+      {blockLoadState.failed && (
+        <div className="pointer-events-none absolute inset-0 z-[90] grid place-items-center">
+          <div className="rounded-md bg-red-600/80 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
+            框体加载失败，请刷新重试
+          </div>
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-x-3 top-3">
         <ViewportToolbar mobile={mobile} />
       </div>
