@@ -148,4 +148,13 @@ jobs:
               nginx -t
               systemctl enable nginx || true
               systemctl reload nginx || systemctl restart nginx
+
+              # Ensure existing certificate also covers the new subdomain.
+              # Older certs may only include miaoplus.com and cause CN/SAN mismatch.
+              if ! openssl x509 -in "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" -noout -text | rg -q "DNS:${APP_SUBDOMAIN}"; then
+                certbot --nginx -n --agree-tos --email "${EMAIL}" --cert-name "${DOMAIN}" --expand \
+                  -d "${DOMAIN}" -d "${APP_SUBDOMAIN}"
+                nginx -t
+                systemctl reload nginx || systemctl restart nginx
+              fi
             fi
