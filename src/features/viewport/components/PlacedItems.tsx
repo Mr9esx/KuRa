@@ -168,13 +168,15 @@ export function PlacedItems({
   const [innerW, innerD] = block.innerSize
   const [cols, rows] = block.cellGrid
 
-  const toCellFromRay = (ray: THREE.Ray): [number, number] | null => {
+  const toCellFromRay = (ray: THREE.Ray, gridSize: [number, number]): [number, number] | null => {
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2)
     const point = new THREE.Vector3()
     const hit = ray.intersectPlane(plane, point)
     if (!hit) return null
-    const col = Math.floor((point.x + innerW / 2) / CELL_SIZE)
-    const row = Math.floor((point.z + innerD / 2) / CELL_SIZE)
+    const ux = (point.x + innerW / 2) / CELL_SIZE
+    const uz = (point.z + innerD / 2) / CELL_SIZE
+    const col = Math.round(ux - gridSize[0] / 2)
+    const row = Math.round(uz - gridSize[1] / 2)
     if (col < 0 || col >= cols || row < 0 || row >= rows) return null
     return [col, row]
   }
@@ -227,7 +229,7 @@ export function PlacedItems({
             e.stopPropagation()
             if (!dragging) return
             if (e.pointerType === "mouse" && (e.buttons & 1) !== 1) return
-            const cell = toCellFromRay(e.ray)
+            const cell = toCellFromRay(e.ray, p.gridSize)
             if (!cell) return
             onMovePlacement(p.id, cell[0], cell[1])
           },

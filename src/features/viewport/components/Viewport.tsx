@@ -1445,6 +1445,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
   const [mem, setMem] = useState<number | null>(null)
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
+  const [pointerPlacingActive, setPointerPlacingActive] = useState(false)
   const dragPlacedRef = useRef(false)
   const [blockLoadState, setBlockLoadState] = useState<{ loading: boolean; failed: boolean }>({
     loading: true,
@@ -1459,6 +1460,8 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const presetAppliedByQueryRef = useRef(false)
   const lastDragClientRef = useRef<{ x: number; y: number } | null>(null)
+  const pointerPlaceStartRef = useRef<{ x: number; y: number } | null>(null)
+  const pointerPlaceMovedRef = useRef(false)
 
   const bindSceneContext = (camera: THREE.Camera, canvas: HTMLCanvasElement) => {
     cameraRef.current = camera
@@ -1470,7 +1473,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     useEditorStore.getState().selectPlacement(null)
   }, [])
 
-  const resolveDropCell = useCallback((clientX: number, clientY: number): [number, number] | null => {
+  const resolveDropCell = useCallback((
+    clientX: number,
+    clientY: number,
+    itemGridSize?: [number, number],
+  ): [number, number] | null => {
     const camera = cameraRef.current
     const canvas = canvasRef.current
     if (!camera || !canvas) return null
@@ -1489,8 +1496,14 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     const block = useEditorStore.getState().block
     const [innerW, innerD] = block.innerSize
     const [cols, rows] = block.cellGrid
-    const col = Math.floor((point.x + innerW / 2) / CELL_SIZE)
-    const row = Math.floor((point.z + innerD / 2) / CELL_SIZE)
+    const ux = (point.x + innerW / 2) / CELL_SIZE
+    const uz = (point.z + innerD / 2) / CELL_SIZE
+
+    // Align by item centroid so dragged preview stays centered under pointer.
+    const gw = itemGridSize?.[0] ?? 1
+    const gd = itemGridSize?.[1] ?? 1
+    const col = Math.round(ux - gw / 2)
+    const row = Math.round(uz - gd / 2)
     if (col < 0 || col >= cols || row < 0 || row >= rows) return null
     return [col, row]
   }, [])
@@ -1503,7 +1516,8 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
     const tryPlaceByClientPoint = (clientX: number, clientY: number) => {
       if (!activeSku || placedInCurrentDrag) return
-      const cell = resolveDropCell(clientX, clientY)
+      const item = findItemBySku(activeSku)
+      const cell = resolveDropCell(clientX, clientY, item?.gridSize)
       logViewportDnD("tryPlaceByClientPoint", { activeSku, clientX, clientY, cell })
       if (!cell) return
       placeItemBySku(activeSku, cell[0], cell[1])
@@ -1517,7 +1531,8 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       const touch = e.touches[0]
       if (!touch) return
       lastTouchClient = { x: touch.clientX, y: touch.clientY }
-      const cell = resolveDropCell(touch.clientX, touch.clientY)
+      const item = activeSku ? findItemBySku(activeSku) : undefined
+      const cell = resolveDropCell(touch.clientX, touch.clientY, item?.gridSize)
       setHoveredCell(cell)
       logViewportDnD("touchmove", { x: touch.clientX, y: touch.clientY, cell })
     }
@@ -1662,7 +1677,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     e.preventDefault()
     e.dataTransfer.dropEffect = "copy"
     lastDragClientRef.current = { x: e.clientX, y: e.clientY }
-    const cell = resolveDropCell(e.clientX, e.clientY)
+    const activeSku = draggingSku ||
+      e.dataTransfer.getData(DATA_TRANSFER_TYPE) ||
+      e.dataTransfer.getData("text/plain")
+    const item = activeSku ? findItemBySku(activeSku) : undefined
+    const cell = resolveDropCell(e.clientX, e.clientY, item?.gridSize)
     setHoveredCell(cell)
     logViewportDnD("dragover", { x: e.clientX, y: e.clientY, cell, draggingSku })
   }
@@ -1676,7 +1695,8 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       setHoveredCell(null)
       return
     }
-    const cell = resolveDropCell(e.clientX, e.clientY)
+    const item = findItemBySku(sku)
+    const cell = resolveDropCell(e.clientX, e.clientY, item?.gridSize)
     logViewportDnD("drop", { sku, x: e.clientX, y: e.clientY, cell, draggingSku })
     if (!cell) {
       setHoveredCell(null)
@@ -1693,13 +1713,15 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
   const handleMobileGhostMove = useCallback((clientX: number, clientY: number) => {
     if (!mobile || !selectedCatalogSku || draggingSku) return
-    const cell = resolveDropCell(clientX, clientY)
+    const item = findItemBySku(selectedCatalogSku)
+    const cell = resolveDropCell(clientX, clientY, item?.gridSize)
     setHoveredCell(cell)
   }, [mobile, selectedCatalogSku, draggingSku, resolveDropCell, setHoveredCell])
 
   const handleMobileGhostRelease = useCallback((clientX: number, clientY: number) => {
     if (!mobile || !selectedCatalogSku || draggingSku) return
-    const cell = resolveDropCell(clientX, clientY)
+    const item = findItemBySku(selectedCatalogSku)
+    const cell = resolveDropCell(clientX, clientY, item?.gridSize)
     if (!cell) {
       setHoveredCell(null)
       return
@@ -1720,14 +1742,58 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onDragLeave={() => setHoveredCell(null)}
+      onMouseDown={(e) => {
+        if (mobile) return
+        if (e.button !== 0) return
+        if (!selectedCatalogSku || draggingSku) return
+        setPointerPlacingActive(true)
+        pointerPlaceStartRef.current = { x: e.clientX, y: e.clientY }
+        pointerPlaceMovedRef.current = false
+      }}
       onMouseMove={(e) => {
-        if (!mobile) return
-        if (e.buttons !== 1) return
-        handleMobileGhostMove(e.clientX, e.clientY)
+        if (mobile) {
+          if (e.buttons !== 1) return
+          handleMobileGhostMove(e.clientX, e.clientY)
+          return
+        }
+        if (!pointerPlacingActive || !selectedCatalogSku || draggingSku) return
+        const start = pointerPlaceStartRef.current
+        if (start) {
+          const dx = e.clientX - start.x
+          const dy = e.clientY - start.y
+          if (dx * dx + dy * dy > 16) {
+            pointerPlaceMovedRef.current = true
+          }
+        }
+        if (!pointerPlaceMovedRef.current) return
+        const item = selectedCatalogSku ? findItemBySku(selectedCatalogSku) : undefined
+        const cell = resolveDropCell(e.clientX, e.clientY, item?.gridSize)
+        setHoveredCell(cell)
       }}
       onMouseUp={(e) => {
-        if (!mobile) return
-        handleMobileGhostRelease(e.clientX, e.clientY)
+        if (mobile) {
+          handleMobileGhostRelease(e.clientX, e.clientY)
+          return
+        }
+        if (!pointerPlacingActive) return
+        if (pointerPlaceMovedRef.current && selectedCatalogSku && !draggingSku) {
+          const item = findItemBySku(selectedCatalogSku)
+          const cell = resolveDropCell(e.clientX, e.clientY, item?.gridSize)
+          if (cell) {
+            placeItemBySku(selectedCatalogSku, cell[0], cell[1])
+          }
+        }
+        setPointerPlacingActive(false)
+        pointerPlaceStartRef.current = null
+        pointerPlaceMovedRef.current = false
+        setHoveredCell(null)
+      }}
+      onMouseLeave={() => {
+        if (mobile || !pointerPlacingActive) return
+        setPointerPlacingActive(false)
+        pointerPlaceStartRef.current = null
+        pointerPlaceMovedRef.current = false
+        setHoveredCell(null)
       }}
       onTouchMove={(e) => {
         if (!mobile) return
@@ -1748,7 +1814,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       >
         <Scene
           previewSku={draggingSku}
-          dragging={!!draggingSku}
+          dragging={!!draggingSku || pointerPlacingActive}
           mobile={mobile}
           onBlockLoadStateChange={setBlockLoadState}
         />
