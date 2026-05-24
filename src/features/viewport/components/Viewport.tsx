@@ -1822,14 +1822,14 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         <FpsTracker onUpdate={(f, m) => { setFps(f); setMem(m) }} />
       </UnifiedPreviewCanvas>
       {blockLoadState.loading && (
-        <div className="pointer-events-none absolute inset-0 z-[90] grid place-items-center">
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[90] flex -translate-y-1/2 justify-center">
           <div className="rounded-md bg-black/35 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
             框体加载中...
           </div>
         </div>
       )}
       {blockLoadState.failed && (
-        <div className="pointer-events-none absolute inset-0 z-[90] grid place-items-center">
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[90] flex -translate-y-1/2 justify-center">
           <div className="rounded-md bg-red-600/80 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
             框体加载失败，请刷新重试
           </div>

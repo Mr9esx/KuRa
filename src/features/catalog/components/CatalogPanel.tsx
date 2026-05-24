@@ -349,31 +349,49 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   if (loading) {
     if (mobile) {
       return (
-        <div className="flex h-full flex-col overflow-hidden border-t border-border bg-background">
+        <div className="flex flex-col overflow-hidden border-t border-border bg-background">
           <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-            <div className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
-              <Skeleton className="h-7 rounded-lg" />
-              <Skeleton className="h-7 rounded-lg" />
+            <div id="tour-m-block-picker" className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
+              <button
+                onClick={() => setMobileTab("items")}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  mobileTab === "items"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                收纳件
+              </button>
+              <button
+                onClick={() => setMobileTab("block")}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  mobileTab === "block"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                框体
+              </button>
             </div>
-            <div className="flex items-center gap-0.5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="size-9 rounded-md" />
+            <MobileActionBar />
+          </div>
+          <div className="h-[226px] px-4 pb-4 pt-2">
+            <div className="flex gap-2 pb-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-7 w-16 shrink-0 rounded-full" />
               ))}
             </div>
-          </div>
-          <div className="flex gap-2 px-4 pt-3 pb-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-7 w-16 shrink-0 rounded-full" />
-            ))}
-          </div>
-          <div className="grid gap-2 px-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-lg border border-border p-2">
-                <Skeleton className="mb-1.5 aspect-square w-full rounded-md" />
-                <Skeleton className="h-3 w-3/4 rounded" />
-                <Skeleton className="mt-1 h-2.5 w-1/2 rounded" />
-              </div>
-            ))}
+            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-lg border border-border p-2">
+                  <Skeleton className="mb-1.5 aspect-square w-full rounded-md" />
+                  <Skeleton className="h-3 w-3/4 rounded" />
+                  <Skeleton className="mt-1 h-2.5 w-1/2 rounded" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )
