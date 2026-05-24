@@ -22,7 +22,9 @@ jobs:
         run: npm ci
 
       - name: Build project
-        run: npx vite build
+        run: npm run build
+        env:
+          ENABLE_OBFUSCATION: "true"
 
       - name: Pack build output
         run: tar -czf release.tar.gz dist

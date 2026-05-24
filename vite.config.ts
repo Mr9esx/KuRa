@@ -6,28 +6,29 @@ import path from "path"
 
 export default defineConfig(({ command }) => {
   const isBuild = command === "build"
+  const enableObfuscation = isBuild && process.env.ENABLE_OBFUSCATION === "true"
 
   return {
     plugins: [
       react(),
       tailwindcss(),
-      isBuild &&
+      enableObfuscation &&
         obfuscatorPlugin({
           apply: "build",
-          include: [/src\/(features\/viewport|stores|tools)\//],
+          // Keep obfuscation away from modules using dynamic import(),
+          // otherwise bundler may fail to rewrite chunk URLs (e.g. /assets/BlockMesh 404).
+          include: [/src\/(stores|engine)\//],
           options: {
             compact: true,
-            controlFlowFlattening: true,
-            controlFlowFlatteningThreshold: 0.2,
+            controlFlowFlattening: false,
             deadCodeInjection: false,
             identifierNamesGenerator: "hexadecimal",
             renameGlobals: false,
             simplify: true,
-            splitStrings: true,
-            splitStringsChunkLength: 8,
+            splitStrings: false,
             stringArray: true,
-            stringArrayEncoding: ["base64"],
-            stringArrayThreshold: 0.75,
+            stringArrayEncoding: [],
+            stringArrayThreshold: 0.3,
             unicodeEscapeSequence: false,
           },
         }),
@@ -40,6 +41,7 @@ export default defineConfig(({ command }) => {
     build: {
       chunkSizeWarningLimit: 800,
       sourcemap: false,
+      target: "es2018",
       minify: "terser",
       terserOptions: {
         compress: {
