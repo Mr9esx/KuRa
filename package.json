@@ -11,6 +11,7 @@
     "images:compress": "node scripts/compress-images.mjs",
     "images:compress:dry": "node scripts/compress-images.mjs --dry-run",
     "images:compress:items": "node scripts/compress-images.mjs --dir=public/images/items",
+    "images:compress:block": "node scripts/compress-images.mjs --dir=public/images/block",
     "images:compress:hq": "node scripts/compress-images.mjs --max-size=1024 --png-colors=256 --png-dither=0.8",
     "images:compress:help": "node scripts/compress-images.mjs --help"
   },

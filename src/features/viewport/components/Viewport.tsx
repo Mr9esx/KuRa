@@ -25,7 +25,7 @@ import {
 import { AppLogo } from "@/components/brand/app-logo"
 import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
-import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, Maximize, Minimize, AlertTriangle, Info } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, AlertTriangle, Info } from "lucide-react"
 import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -236,6 +236,11 @@ function normalizeImportedLayout(raw: unknown): ImportedLayoutData {
     placements.push({ sku, cell: [Math.trunc(col), Math.trunc(row)] })
   }
   return { blockSku, placements }
+}
+
+function logViewportDnD(...args: unknown[]) {
+  if (!import.meta.env.DEV) return
+  console.log("[viewport-mobile-dnd]", ...args)
 }
 
 async function parseImportedLayoutFile(file: File): Promise<ImportedLayoutData> {
@@ -692,39 +697,8 @@ function PresetSelector({
   )
 }
 
-function useFullscreen() {
-  const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void }
-  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }
-
-  const getIsFullscreen = () => !!(document.fullscreenElement ?? doc.webkitFullscreenElement)
-  const [isFullscreen, setIsFullscreen] = useState(getIsFullscreen)
-
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(getIsFullscreen())
-    document.addEventListener("fullscreenchange", onChange)
-    document.addEventListener("webkitfullscreenchange", onChange)
-    return () => {
-      document.removeEventListener("fullscreenchange", onChange)
-      document.removeEventListener("webkitfullscreenchange", onChange)
-    }
-  }, [])
-
-  const toggle = useCallback(() => {
-    if (getIsFullscreen()) {
-      (document.exitFullscreen ?? doc.webkitExitFullscreen)?.call(document)
-    } else {
-      (el.requestFullscreen ?? el.webkitRequestFullscreen)?.call(el).catch(() => {})
-    }
-  }, [])
-
-  const supported = typeof el.requestFullscreen === "function" || typeof el.webkitRequestFullscreen === "function"
-
-  return { isFullscreen, toggle, supported }
-}
-
 function MobileTopBar() {
   const [aboutOpen, setAboutOpen] = useState(false)
-  const { isFullscreen, toggle: toggleFullscreen, supported: fullscreenSupported } = useFullscreen()
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
       <div className="flex items-center gap-1">
@@ -749,25 +723,6 @@ function MobileTopBar() {
           </TooltipTrigger>
           <TooltipContent>功能引导</TooltipContent>
         </Tooltip>
-        {fullscreenSupported && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  onClick={toggleFullscreen}
-                  className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
-                />
-              }
-            >
-              {isFullscreen ? (
-                <Minimize className="size-4" strokeWidth={2.2} />
-              ) : (
-                <Maximize className="size-4" strokeWidth={2.2} />
-              )}
-            </TooltipTrigger>
-            <TooltipContent>{isFullscreen ? "退出全屏" : "全屏"}</TooltipContent>
-          </Tooltip>
-        )}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -1490,17 +1445,20 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
   const [mem, setMem] = useState<number | null>(null)
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
+  const dragPlacedRef = useRef(false)
   const [blockLoadState, setBlockLoadState] = useState<{ loading: boolean; failed: boolean }>({
     loading: true,
     failed: false,
   })
   const { data: catalogData } = useCatalog()
   const applyPreset = useEditorStore((s) => s.applyPreset)
+  const selectedCatalogSku = useEditorStore((s) => s.selectedCatalogSku)
   const setHoveredCell = useEditorStore((s) => s.setHoveredCell)
   const placeItemBySku = useEditorStore((s) => s.placeItemBySku)
   const cameraRef = useRef<THREE.Camera | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const presetAppliedByQueryRef = useRef(false)
+  const lastDragClientRef = useRef<{ x: number; y: number } | null>(null)
 
   const bindSceneContext = (camera: THREE.Camera, canvas: HTMLCanvasElement) => {
     cameraRef.current = camera
@@ -1539,19 +1497,54 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
   useEffect(() => {
     let activeSku: string | null = null
+    let lastTouchClient: { x: number; y: number } | null = null
+    let placedInCurrentDrag = false
+    let mobileEndFallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+    const tryPlaceByClientPoint = (clientX: number, clientY: number) => {
+      if (!activeSku || placedInCurrentDrag) return
+      const cell = resolveDropCell(clientX, clientY)
+      logViewportDnD("tryPlaceByClientPoint", { activeSku, clientX, clientY, cell })
+      if (!cell) return
+      placeItemBySku(activeSku, cell[0], cell[1])
+      placedInCurrentDrag = true
+      dragPlacedRef.current = true
+      logViewportDnD("placed", { sku: activeSku, cell, source: "client-point" })
+    }
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault()
       const touch = e.touches[0]
       if (!touch) return
+      lastTouchClient = { x: touch.clientX, y: touch.clientY }
       const cell = resolveDropCell(touch.clientX, touch.clientY)
       setHoveredCell(cell)
+      logViewportDnD("touchmove", { x: touch.clientX, y: touch.clientY, cell })
     }
 
-    const onTouchEnd = () => {
-      const hoveredCell = useEditorStore.getState().hoveredCell
-      if (hoveredCell && activeSku) {
-        placeItemBySku(activeSku, hoveredCell[0], hoveredCell[1])
+    const onTouchEnd = (e: TouchEvent) => {
+      if (mobileEndFallbackTimer) {
+        clearTimeout(mobileEndFallbackTimer)
+        mobileEndFallbackTimer = null
+      }
+      const endTouch = e.changedTouches[0]
+      logViewportDnD("touchend", {
+        activeSku,
+        endTouch: endTouch ? { x: endTouch.clientX, y: endTouch.clientY } : null,
+        lastTouchClient,
+        hoveredCell: useEditorStore.getState().hoveredCell,
+      })
+      if (endTouch) {
+        tryPlaceByClientPoint(endTouch.clientX, endTouch.clientY)
+      } else if (lastTouchClient) {
+        tryPlaceByClientPoint(lastTouchClient.x, lastTouchClient.y)
+      } else {
+        const hoveredCell = useEditorStore.getState().hoveredCell
+        if (hoveredCell && activeSku && !placedInCurrentDrag) {
+          placeItemBySku(activeSku, hoveredCell[0], hoveredCell[1])
+          placedInCurrentDrag = true
+          dragPlacedRef.current = true
+        }
       }
       cleanupTouch()
       setDraggingSku(null)
@@ -1566,6 +1559,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
     const cleanupTouch = () => {
       activeSku = null
+      lastTouchClient = null
+      if (mobileEndFallbackTimer) {
+        clearTimeout(mobileEndFallbackTimer)
+        mobileEndFallbackTimer = null
+      }
       window.removeEventListener("touchmove", onTouchMove)
       window.removeEventListener("touchend", onTouchEnd)
       window.removeEventListener("touchcancel", onTouchEnd)
@@ -1575,12 +1573,53 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       const custom = event as CustomEvent<{ sku?: string }>
       if (custom.detail?.sku) {
         activeSku = custom.detail.sku
+        placedInCurrentDrag = false
+        dragPlacedRef.current = false
+        lastTouchClient = null
+        lastDragClientRef.current = null
         setDraggingSku(custom.detail.sku)
         addTouchListeners()
+        logViewportDnD("dragItemStart event", { sku: custom.detail.sku, mobile })
       }
     }
 
-    const onEnd = () => {
+    const onEnd = (event: Event) => {
+      const custom = event as CustomEvent<{ clientX?: number; clientY?: number }>
+      const endX = custom.detail?.clientX
+      const endY = custom.detail?.clientY
+      logViewportDnD("dragItemEnd event", {
+        activeSku,
+        endX,
+        endY,
+        lastDragClient: lastDragClientRef.current,
+        lastTouchClient,
+        placedInCurrentDrag,
+        dragPlacedRef: dragPlacedRef.current,
+        mobile,
+      })
+
+      if (mobile) {
+        // On mobile, drag end may fire before touchend; defer cleanup briefly.
+        if (mobileEndFallbackTimer) clearTimeout(mobileEndFallbackTimer)
+        mobileEndFallbackTimer = setTimeout(() => {
+          if (
+            !dragPlacedRef.current &&
+            activeSku &&
+            Number.isFinite(endX) &&
+            Number.isFinite(endY)
+          ) {
+            tryPlaceByClientPoint(endX as number, endY as number)
+          } else if (!dragPlacedRef.current && activeSku && lastDragClientRef.current) {
+            tryPlaceByClientPoint(lastDragClientRef.current.x, lastDragClientRef.current.y)
+          } else if (!dragPlacedRef.current && activeSku && lastTouchClient && !placedInCurrentDrag) {
+            tryPlaceByClientPoint(lastTouchClient.x, lastTouchClient.y)
+          }
+          cleanupTouch()
+          setDraggingSku(null)
+          setHoveredCell(null)
+        }, 120)
+        return
+      }
       cleanupTouch()
       setDraggingSku(null)
       setHoveredCell(null)
@@ -1593,7 +1632,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       window.removeEventListener(CUSTOM_EVENTS.dragItemEnd, onEnd)
       cleanupTouch()
     }
-  }, [resolveDropCell, setHoveredCell, placeItemBySku])
+  }, [resolveDropCell, setHoveredCell, placeItemBySku, mobile])
 
   useEffect(() => {
     if (presetAppliedByQueryRef.current) return
@@ -1622,8 +1661,10 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "copy"
+    lastDragClientRef.current = { x: e.clientX, y: e.clientY }
     const cell = resolveDropCell(e.clientX, e.clientY)
     setHoveredCell(cell)
+    logViewportDnD("dragover", { x: e.clientX, y: e.clientY, cell, draggingSku })
   }
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -1636,20 +1677,41 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       return
     }
     const cell = resolveDropCell(e.clientX, e.clientY)
+    logViewportDnD("drop", { sku, x: e.clientX, y: e.clientY, cell, draggingSku })
     if (!cell) {
       setHoveredCell(null)
       setDraggingSku(null)
       return
     }
     placeItemBySku(sku, cell[0], cell[1])
+    dragPlacedRef.current = true
+    logViewportDnD("placed", { sku, cell, source: "drop" })
+    lastDragClientRef.current = null
     setHoveredCell(null)
     setDraggingSku(null)
   }
 
+  const handleMobileGhostMove = useCallback((clientX: number, clientY: number) => {
+    if (!mobile || !selectedCatalogSku || draggingSku) return
+    const cell = resolveDropCell(clientX, clientY)
+    setHoveredCell(cell)
+  }, [mobile, selectedCatalogSku, draggingSku, resolveDropCell, setHoveredCell])
+
+  const handleMobileGhostRelease = useCallback((clientX: number, clientY: number) => {
+    if (!mobile || !selectedCatalogSku || draggingSku) return
+    const cell = resolveDropCell(clientX, clientY)
+    if (!cell) {
+      setHoveredCell(null)
+      return
+    }
+    placeItemBySku(selectedCatalogSku, cell[0], cell[1])
+    setHoveredCell(null)
+  }, [mobile, selectedCatalogSku, draggingSku, resolveDropCell, placeItemBySku, setHoveredCell])
+
   const cameraFov = mobile ? 50 : 45
   const cameraPosition: [number, number, number] = mobile
-    ? [200, 180, 200]
-    : [280, 250, 280]
+    ? [0, 260, 200]
+    : [0, 360, 280]
 
   return (
     <div
@@ -1658,6 +1720,27 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onDragLeave={() => setHoveredCell(null)}
+      onMouseMove={(e) => {
+        if (!mobile) return
+        if (e.buttons !== 1) return
+        handleMobileGhostMove(e.clientX, e.clientY)
+      }}
+      onMouseUp={(e) => {
+        if (!mobile) return
+        handleMobileGhostRelease(e.clientX, e.clientY)
+      }}
+      onTouchMove={(e) => {
+        if (!mobile) return
+        const touch = e.touches[0]
+        if (!touch) return
+        handleMobileGhostMove(touch.clientX, touch.clientY)
+      }}
+      onTouchEnd={(e) => {
+        if (!mobile) return
+        const touch = e.changedTouches[0]
+        if (!touch) return
+        handleMobileGhostRelease(touch.clientX, touch.clientY)
+      }}
     >
       <UnifiedPreviewCanvas
         camera={{ fov: cameraFov, position: cameraPosition, near: 10, far: 1200 }}

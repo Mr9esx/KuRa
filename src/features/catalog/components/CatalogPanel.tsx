@@ -20,6 +20,11 @@ const emptyDragImage = (() => {
   return canvas
 })()
 
+function logMobileDnD(...args: unknown[]) {
+  if (!import.meta.env.DEV) return
+  console.log("[catalog-mobile-dnd]", ...args)
+}
+
 function getItemImageSrc(item: CatalogItem): string | null {
   if (!item.imagePath) return null
   const base = import.meta.env.BASE_URL
@@ -133,6 +138,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     (e: React.TouchEvent, sku: string) => {
       const touch = e.touches[0]
       if (!touch) return
+      logMobileDnD("touchstart", { sku, x: touch.clientX, y: touch.clientY })
       longPressOriginRef.current = { x: touch.clientX, y: touch.clientY }
       didDragRef.current = false
 
@@ -140,6 +146,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
         didDragRef.current = true
         longPressTimerRef.current = null
         selectItem(null)
+        logMobileDnD("longpress->dragItemStart", { sku })
         window.dispatchEvent(
           new CustomEvent(CUSTOM_EVENTS.dragItemStart, { detail: { sku } }),
         )
@@ -156,6 +163,12 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       const dx = touch.clientX - longPressOriginRef.current.x
       const dy = touch.clientY - longPressOriginRef.current.y
       if (dx * dx + dy * dy > 100) {
+        logMobileDnD("touchmove cancel longpress", {
+          x: touch.clientX,
+          y: touch.clientY,
+          dx,
+          dy,
+        })
         cancelLongPress()
       }
     },
@@ -163,6 +176,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
   )
 
   const handleTouchEnd = useCallback(() => {
+    logMobileDnD("touchend")
     cancelLongPress()
   }, [cancelLongPress])
 
@@ -204,10 +218,16 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
     window.dispatchEvent(
       new CustomEvent(CUSTOM_EVENTS.dragItemStart, { detail: { sku } }),
     )
+    logMobileDnD("dragstart", { sku, x: e.clientX, y: e.clientY })
   }
 
-  const handleDragEnd = () => {
-    window.dispatchEvent(new Event(CUSTOM_EVENTS.dragItemEnd))
+  const handleDragEnd = (e: DragEvent<HTMLButtonElement>) => {
+    logMobileDnD("dragend", { x: e.clientX, y: e.clientY })
+    window.dispatchEvent(
+      new CustomEvent(CUSTOM_EVENTS.dragItemEnd, {
+        detail: { clientX: e.clientX, clientY: e.clientY },
+      }),
+    )
   }
 
   const handleBlockSelect = useCallback(
@@ -484,6 +504,9 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       key={item.sku}
                       id={itemIndex === 0 ? "tour-first-item" : undefined}
                       onClick={() => handleMobileItemClick(item.sku)}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item.sku)}
+                      onDragEnd={handleDragEnd}
                       onTouchStart={(e) => handleTouchStart(e, item.sku)}
                       onTouchMove={handleTouchMove}
                       onTouchEnd={handleTouchEnd}

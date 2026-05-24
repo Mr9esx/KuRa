@@ -86,7 +86,7 @@ function getSteps(mobile: boolean): TourStep[] {
         ? "选中刚才放置的收纳件，然后点击下方工具栏的 🗑️ 删除按钮。"
         : "选中刚才放置的收纳件，然后点击工具栏中的「删除」按钮。也可以用 Delete 键删除。",
       targetId: mobile ? "tour-m-delete-btn" : "tour-delete-btn",
-      position: mobile ? "top" : "bottom",
+      position: "bottom",
       showOverlay: false,
       onEnter: () => {
         // 强制用户在本步骤重新完成“选中 -> 删除”的完整动作
