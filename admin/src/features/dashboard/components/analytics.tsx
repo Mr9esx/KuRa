@@ -5,24 +5,34 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import type { AnalyticsOverviewResponse } from '@/lib/api-client'
 import { AnalyticsChart } from './analytics-chart'
+import { GeoHotspotMap } from './geo-hotspot-map'
 
-export function Analytics() {
+export function Analytics({ data }: { data: AnalyticsOverviewResponse }) {
+  const totalEvents = data.summary.events
+  const uniqueUsers = data.summary.unique_users
+  const uniqueVisitors = data.summary.unique_visitors
+  const sessions = data.summary.sessions
+  const avgEventsPerSession = data.summary.avg_events_per_session.toFixed(2)
+
   return (
     <div className='space-y-4'>
       <Card>
         <CardHeader>
-          <CardTitle>Traffic Overview</CardTitle>
-          <CardDescription>Weekly clicks and unique visitors</CardDescription>
+          <CardTitle>流量趋势</CardTitle>
+          <CardDescription>
+            最近 {data.days} 天事件量与访客趋势
+          </CardDescription>
         </CardHeader>
         <CardContent className='px-6'>
-          <AnalyticsChart />
+          <AnalyticsChart trend={data.trend} />
         </CardContent>
       </Card>
       <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Total Clicks</CardTitle>
+            <CardTitle className='text-sm font-medium'>总事件数</CardTitle>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               viewBox='0 0 24 24'
@@ -38,15 +48,15 @@ export function Analytics() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>1,248</div>
-            <p className='text-xs text-muted-foreground'>+12.4% vs last week</p>
+            <div className='text-2xl font-bold'>{totalEvents}</div>
+            <p className='text-xs text-muted-foreground'>
+              近 24 小时 {data.summary.last_24h_events}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>
-              Unique Visitors
-            </CardTitle>
+            <CardTitle className='text-sm font-medium'>唯一用户</CardTitle>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               viewBox='0 0 24 24'
@@ -62,13 +72,15 @@ export function Analytics() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>832</div>
-            <p className='text-xs text-muted-foreground'>+5.8% vs last week</p>
+            <div className='text-2xl font-bold'>{uniqueUsers}</div>
+            <p className='text-xs text-muted-foreground'>
+              近 24 小时活跃访客 {data.summary.last_24h_active_visitors}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Bounce Rate</CardTitle>
+            <CardTitle className='text-sm font-medium'>唯一访客</CardTitle>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               viewBox='0 0 24 24'
@@ -83,13 +95,13 @@ export function Analytics() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>42%</div>
-            <p className='text-xs text-muted-foreground'>-3.2% vs last week</p>
+            <div className='text-2xl font-bold'>{uniqueVisitors}</div>
+            <p className='text-xs text-muted-foreground'>会话数 {sessions}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Avg. Session</CardTitle>
+            <CardTitle className='text-sm font-medium'>平均事件/会话</CardTitle>
             <svg
               xmlns='http://www.w3.org/2000/svg'
               viewBox='0 0 24 24'
@@ -105,25 +117,23 @@ export function Analytics() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>3m 24s</div>
-            <p className='text-xs text-muted-foreground'>+18s vs last week</p>
+            <div className='text-2xl font-bold'>{avgEventsPerSession}</div>
+            <p className='text-xs text-muted-foreground'>会话行为活跃度</p>
           </CardContent>
         </Card>
       </div>
       <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>
         <Card className='col-span-1 lg:col-span-4'>
           <CardHeader>
-            <CardTitle>Referrers</CardTitle>
-            <CardDescription>Top sources driving traffic</CardDescription>
+            <CardTitle>热门事件</CardTitle>
+            <CardDescription>触发次数最多的行为</CardDescription>
           </CardHeader>
           <CardContent>
             <SimpleBarList
-              items={[
-                { name: 'Direct', value: 512 },
-                { name: 'Product Hunt', value: 238 },
-                { name: 'Twitter', value: 174 },
-                { name: 'Blog', value: 104 },
-              ]}
+              items={data.top_events.map((item) => ({
+                name: item.name,
+                value: item.count,
+              }))}
               barClass='bg-primary'
               valueFormatter={(n) => `${n}`}
             />
@@ -131,22 +141,30 @@ export function Analytics() {
         </Card>
         <Card className='col-span-1 lg:col-span-3'>
           <CardHeader>
-            <CardTitle>Devices</CardTitle>
-            <CardDescription>How users access your app</CardDescription>
+            <CardTitle>设备分布</CardTitle>
+            <CardDescription>不同设备上的访问情况</CardDescription>
           </CardHeader>
           <CardContent>
             <SimpleBarList
-              items={[
-                { name: 'Desktop', value: 74 },
-                { name: 'Mobile', value: 22 },
-                { name: 'Tablet', value: 4 },
-              ]}
+              items={data.devices.map((item) => ({
+                name: item.name,
+                value: item.count,
+              }))}
               barClass='bg-muted-foreground'
-              valueFormatter={(n) => `${n}%`}
+              valueFormatter={(n) => `${n}`}
             />
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>地理热点</CardTitle>
+          <CardDescription>按 IP 解析后的城市访问热度</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GeoHotspotMap hotspots={data.geo_hotspots ?? []} />
+        </CardContent>
+      </Card>
     </div>
   )
 }

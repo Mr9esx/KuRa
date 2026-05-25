@@ -32,10 +32,27 @@ func (h *ProductHandler) PublicList(c echo.Context) error {
 
 	skuCategories := h.getProductCategories(products)
 
+	defaultBlockSKU := ""
+	if productType == "block" {
+		for _, p := range products {
+			if p.IsDefault {
+				defaultBlockSKU = p.SKU
+				break
+			}
+		}
+		if defaultBlockSKU == "" && len(products) > 0 {
+			// Fallback for legacy data without is_default set.
+			defaultBlockSKU = products[0].SKU
+		}
+	}
+
 	result := make([]map[string]interface{}, 0, len(products))
 	for _, p := range products {
 		item := productToPublicJSON(p)
 		item["categories"] = skuCategories[p.SKU]
+		if productType == "block" {
+			item["isDefault"] = p.SKU == defaultBlockSKU
+		}
 		result = append(result, item)
 	}
 	return c.JSON(http.StatusOK, result)

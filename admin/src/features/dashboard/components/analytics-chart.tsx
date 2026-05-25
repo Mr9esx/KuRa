@@ -1,44 +1,17 @@
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import type { AnalyticsTrendPoint } from '@/lib/api-client'
 
-const data = [
-  {
-    name: 'Mon',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-  {
-    name: 'Tue',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-  {
-    name: 'Wed',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-  {
-    name: 'Thu',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-  {
-    name: 'Fri',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-  {
-    name: 'Sat',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-  {
-    name: 'Sun',
-    clicks: Math.floor(Math.random() * 900) + 100,
-    uniques: Math.floor(Math.random() * 700) + 80,
-  },
-]
+function toAxisName(date: string) {
+  return date.slice(5)
+}
 
-export function AnalyticsChart() {
+export function AnalyticsChart({ trend }: { trend: AnalyticsTrendPoint[] }) {
+  const data = trend.map((item) => ({
+    name: toAxisName(item.date),
+    clicks: item.events,
+    uniques: item.visitors,
+  }))
+
   return (
     <ResponsiveContainer width='100%' height={300}>
       <AreaChart data={data}>

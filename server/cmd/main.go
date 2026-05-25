@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mr9esx/RiSu/server/internal/config"
 	"github.com/Mr9esx/RiSu/server/internal/database"
+	"github.com/Mr9esx/RiSu/server/internal/geo"
 	"github.com/Mr9esx/RiSu/server/internal/handler"
 	"github.com/Mr9esx/RiSu/server/internal/middleware"
 	"github.com/Mr9esx/RiSu/server/internal/model"
@@ -38,6 +39,7 @@ func main() {
 	productSvc := &service.ProductService{DB: db}
 	categorySvc := &service.CategoryService{DB: db}
 	presetSvc := &service.PresetService{DB: db}
+	releaseSvc := &service.ReleaseService{DB: db}
 
 	productHandler := &handler.ProductHandler{Service: productSvc, DB: db}
 	categoryHandler := &handler.CategoryHandler{Service: categorySvc}
@@ -45,7 +47,13 @@ func main() {
 	authHandler := &handler.AuthHandler{DB: db, JWTSecret: cfg.Server.JWTSecret}
 	uploadHandler := &handler.UploadHandler{DataDir: cfg.Storage.DataDir}
 	pub := &publisher.Publisher{DB: db, DataDir: cfg.Storage.DataDir, PublishDir: cfg.Storage.PublishDir}
-	publishHandler := &handler.PublishHandler{Publisher: pub}
+	publishHandler := &handler.PublishHandler{
+		Publisher:      pub,
+		ReleaseService: releaseSvc,
+		ArtifactPath:   cfg.Storage.PublishDir,
+	}
+	releaseHandler := &handler.ReleaseHandler{Service: releaseSvc}
+	analyticsHandler := &handler.AnalyticsHandler{DB: db, Resolver: geo.NewResolver()}
 
 	e := echo.New()
 	e.Use(echoMiddleware.Logger())
@@ -72,6 +80,7 @@ func main() {
 	})
 	public.GET("/categories", categoryHandler.PublicList)
 	public.GET("/presets", presetHandler.PublicList)
+	public.POST("/track", analyticsHandler.Track)
 
 	// Auth
 	auth := e.Group("/api/v1/auth")
@@ -103,7 +112,15 @@ func main() {
 	admin.POST("/upload/model", uploadHandler.UploadModel)
 	admin.POST("/upload/image", uploadHandler.UploadImage)
 
+	admin.GET("/publish/preview", publishHandler.Preview)
 	admin.POST("/publish", publishHandler.Publish)
+
+	admin.GET("/releases", releaseHandler.List)
+	admin.GET("/releases/rollbacks", releaseHandler.ListRollbacks)
+	admin.POST("/releases", releaseHandler.Upsert)
+	admin.POST("/releases/rollbacks", releaseHandler.RecordRollback)
+	admin.GET("/releases/:release_id", releaseHandler.Get)
+	admin.GET("/analytics/overview", analyticsHandler.Overview)
 
 	// Serve uploaded files for admin preview
 	e.Static("/files", cfg.Storage.DataDir)

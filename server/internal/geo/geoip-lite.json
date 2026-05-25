@@ -1,0 +1,14 @@
+[
+  { "cidr": "127.0.0.1/32", "country": "中国", "region": "本地开发", "city": "本机", "lat": 39.9042, "lng": 116.4074 },
+  { "cidr": "10.0.0.0/8", "country": "中国", "region": "内网", "city": "内网", "lat": 39.9042, "lng": 116.4074 },
+  { "cidr": "172.16.0.0/12", "country": "中国", "region": "内网", "city": "内网", "lat": 31.2304, "lng": 121.4737 },
+  { "cidr": "192.168.0.0/16", "country": "中国", "region": "内网", "city": "内网", "lat": 23.1291, "lng": 113.2644 },
+  { "cidr": "223.5.5.0/24", "country": "中国", "region": "浙江", "city": "杭州", "lat": 30.2741, "lng": 120.1551 },
+  { "cidr": "114.114.114.0/24", "country": "中国", "region": "江苏", "city": "南京", "lat": 32.0603, "lng": 118.7969 },
+  { "cidr": "47.92.0.0/15", "country": "中国", "region": "北京", "city": "北京", "lat": 39.9042, "lng": 116.4074 },
+  { "cidr": "39.156.0.0/16", "country": "中国", "region": "北京", "city": "北京", "lat": 39.9042, "lng": 116.4074 },
+  { "cidr": "101.226.0.0/16", "country": "中国", "region": "上海", "city": "上海", "lat": 31.2304, "lng": 121.4737 },
+  { "cidr": "120.204.0.0/16", "country": "中国", "region": "广东", "city": "广州", "lat": 23.1291, "lng": 113.2644 },
+  { "cidr": "8.8.8.0/24", "country": "美国", "region": "California", "city": "Mountain View", "lat": 37.3861, "lng": -122.0839 },
+  { "cidr": "1.1.1.0/24", "country": "澳大利亚", "region": "New South Wales", "city": "Sydney", "lat": -33.8688, "lng": 151.2093 }
+]

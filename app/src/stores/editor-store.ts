@@ -3,6 +3,7 @@ import { immer } from "zustand/middleware/immer"
 import type { BlockCatalogItem, Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
 import { findBlockBySku, findItemBySku } from "@/hooks/use-catalog"
+import { trackEvent } from "@/lib/analytics"
 
 const FALLBACK_BLOCK: BlockCatalogItem = {
   sku: "41001",
@@ -131,19 +132,29 @@ export const useEditorStore = create<EditorState & EditorActions>()(
 
     setBlock: (block) =>
       set((state) => {
+        const previousBlockSku = state.block.sku
         state.block = block
         state.placements = []
         state.hoveredCell = null
         state.selectedPlacementId = null
         state.placementDragActive = false
+        if (previousBlockSku !== block.sku) {
+          trackEvent("block_change", {
+            from_block_sku: previousBlockSku,
+            to_block_sku: block.sku,
+          })
+        }
       }),
 
     selectCatalogItem: (sku) =>
       set((state) => {
-        state.selectedCatalogSku =
-          state.selectedCatalogSku === sku ? null : sku
+        const nextSku = state.selectedCatalogSku === sku ? null : sku
+        state.selectedCatalogSku = nextSku
         if (state.selectedCatalogSku) {
           state.selectedPlacementId = null
+          trackEvent("catalog_item_select", {
+            sku: nextSku,
+          })
         }
       }),
 
@@ -191,6 +202,14 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.selectedPlacementId = id
         state.problemPlacementIds = []
       })
+      trackEvent("item_place", {
+        sku: item.sku,
+        type: item.type,
+        col,
+        row,
+        grid_cols: item.gridSize[0],
+        grid_rows: item.gridSize[1],
+      })
     },
 
     movePlacement: (id, col, row) => {
@@ -208,25 +227,44 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         current.cell = [col, row]
         state.problemPlacementIds = []
       })
+      trackEvent("item_move", {
+        placement_id: id,
+        sku: target.sku,
+        col,
+        row,
+      })
     },
 
     removePlacement: (id) =>
       set((state) => {
+        const removed = state.placements.find((p) => p.id === id)
         state.placements = state.placements.filter((p) => p.id !== id)
         if (state.selectedPlacementId === id) {
           state.selectedPlacementId = null
         }
         state.placementDragActive = false
         state.problemPlacementIds = []
+        if (removed) {
+          trackEvent("item_remove", {
+            placement_id: id,
+            sku: removed.sku,
+          })
+        }
       }),
 
     clearAll: () =>
       set((state) => {
+        const removedCount = state.placements.length
         state.placements = []
         state.hoveredCell = null
         state.selectedPlacementId = null
         state.placementDragActive = false
         state.problemPlacementIds = []
+        if (removedCount > 0) {
+          trackEvent("layout_clear", {
+            removed_count: removedCount,
+          })
+        }
       }),
 
     setMaterialColor: (id) =>
@@ -264,6 +302,12 @@ export const useEditorStore = create<EditorState & EditorActions>()(
             risers: [],
           }
         })
+      })
+      trackEvent("preset_apply", {
+        preset_id: preset.id,
+        preset_name: preset.name,
+        block_sku: preset.blockSku,
+        items_count: preset.items.length,
       })
     },
 
@@ -305,6 +349,12 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.placementDragActive = false
         state.problemPlacementIds = []
         state.placements = nextPlacements
+      })
+
+      trackEvent("layout_import", {
+        block_sku: layout.blockSku,
+        applied_count: nextPlacements.length,
+        skipped_count: skipped,
       })
 
       return { ok: true, applied: nextPlacements.length, skipped }

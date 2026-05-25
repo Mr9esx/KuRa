@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -43,6 +45,47 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y gcc
           CGO_ENABLED=1 go build -o risu-server ./cmd/
+          CGO_ENABLED=1 go build -o risu-release-recorder ./cmd/release-recorder
+
+      - name: Generate release metadata
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p release-meta
+          RELEASE_ID="$(date +%Y%m%d%H%M%S)-${AFTER_SHA:0:7}"
+          echo "${RELEASE_ID}" > release-meta/release_id.txt
+          echo "${BEFORE_SHA}" > release-meta/before_sha.txt
+          echo "${AFTER_SHA}" > release-meta/after_sha.txt
+          echo "release_id=${RELEASE_ID}" >> "$GITHUB_ENV"
+
+          {
+            echo "Release ID: ${RELEASE_ID}"
+            echo "Before: ${BEFORE_SHA}"
+            echo "After:  ${AFTER_SHA}"
+            echo "Generated At: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo
+            echo "## Commit Diff"
+            if [[ -n "${BEFORE_SHA}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+              git log --oneline "${BEFORE_SHA}..${AFTER_SHA}"
+            else
+              echo "No previous commit available on push event."
+            fi
+            echo
+            echo "## File Diff (name-status)"
+            if [[ -n "${BEFORE_SHA}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+              git diff --name-status "${BEFORE_SHA}..${AFTER_SHA}"
+            else
+              echo "No previous commit available on push event."
+            fi
+            echo
+            echo "## File Diff (stat)"
+            if [[ -n "${BEFORE_SHA}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+              git diff --stat "${BEFORE_SHA}..${AFTER_SHA}"
+            else
+              echo "No previous commit available on push event."
+            fi
+          } | tee release-meta/deploy-diff.txt
 
       - name: Pack build outputs
         run: |
@@ -50,6 +93,8 @@ jobs:
             app/dist \
             admin/dist \
             server/risu-server \
+            server/risu-release-recorder \
+            release-meta \
             deploy/
 
       - name: Upload build artifact to server
@@ -74,25 +119,51 @@ jobs:
 
             DEPLOY_PATH="/var/www/miaoplus.com"
             RELEASE_TMP="/tmp/risu-release"
+            RELEASES_DIR="${DEPLOY_PATH}/releases"
 
             rm -rf "${RELEASE_TMP}"
-            mkdir -p "${RELEASE_TMP}" "${DEPLOY_PATH}"
+            mkdir -p "${RELEASE_TMP}" "${DEPLOY_PATH}" "${RELEASES_DIR}"
 
             tar -xzf /tmp/release.tar.gz -C "${RELEASE_TMP}"
             rm -f /tmp/release.tar.gz
 
+            RELEASE_ID="$(cat "${RELEASE_TMP}/release-meta/release_id.txt")"
+            BEFORE_SHA="$(cat "${RELEASE_TMP}/release-meta/before_sha.txt")"
+            AFTER_SHA="$(cat "${RELEASE_TMP}/release-meta/after_sha.txt")"
+            CURRENT_RELEASE_DIR="${RELEASES_DIR}/${RELEASE_ID}"
+            mkdir -p "${CURRENT_RELEASE_DIR}/server"
+
+            PREVIOUS_RELEASE_ID=""
+            if [[ -f "${RELEASES_DIR}/LATEST" ]]; then
+              PREVIOUS_RELEASE_ID="$(cat "${RELEASES_DIR}/LATEST")"
+            fi
+
+            cp -a "${RELEASE_TMP}/app/dist" "${CURRENT_RELEASE_DIR}/dist"
+            cp -a "${RELEASE_TMP}/admin/dist" "${CURRENT_RELEASE_DIR}/admin"
+            cp "${RELEASE_TMP}/server/risu-server" "${CURRENT_RELEASE_DIR}/server/risu-server"
+            cp "${RELEASE_TMP}/server/risu-release-recorder" "${CURRENT_RELEASE_DIR}/server/risu-release-recorder"
+            cp -a "${RELEASE_TMP}/release-meta" "${CURRENT_RELEASE_DIR}/meta"
+            cp "${RELEASE_TMP}/release-meta/deploy-diff.txt" "${CURRENT_RELEASE_DIR}/CHANGELOG.txt"
+            echo "${RELEASE_ID}" > "${RELEASES_DIR}/LATEST"
+
+            echo "===== Release Summary ====="
+            cat "${CURRENT_RELEASE_DIR}/CHANGELOG.txt"
+            echo "==========================="
+
             # Deploy frontend
             rm -rf "${DEPLOY_PATH}/dist"
-            mv "${RELEASE_TMP}/app/dist" "${DEPLOY_PATH}/dist"
+            cp -a "${CURRENT_RELEASE_DIR}/dist" "${DEPLOY_PATH}/dist"
 
             # Deploy admin
             rm -rf "${DEPLOY_PATH}/admin"
-            mv "${RELEASE_TMP}/admin/dist" "${DEPLOY_PATH}/admin"
+            cp -a "${CURRENT_RELEASE_DIR}/admin" "${DEPLOY_PATH}/admin"
 
             # Deploy Go server
             systemctl stop risu-server || true
-            cp "${RELEASE_TMP}/server/risu-server" /usr/local/bin/risu-server
+            cp "${CURRENT_RELEASE_DIR}/server/risu-server" /usr/local/bin/risu-server
             chmod +x /usr/local/bin/risu-server
+            cp "${CURRENT_RELEASE_DIR}/server/risu-release-recorder" /usr/local/bin/risu-release-recorder
+            chmod +x /usr/local/bin/risu-release-recorder
 
             # Deploy config (only if not exists, preserve production config)
             mkdir -p /etc/risu
@@ -108,6 +179,10 @@ jobs:
             cp "${RELEASE_TMP}/deploy/nginx/miaoplus.com.conf" /etc/nginx/sites-available/miaoplus.com.conf
             ln -sf /etc/nginx/sites-available/miaoplus.com.conf /etc/nginx/sites-enabled/miaoplus.com.conf
 
+            # Install rollback tool
+            cp "${RELEASE_TMP}/deploy/rollback-release.sh" /usr/local/bin/risu-rollback
+            chmod +x /usr/local/bin/risu-rollback
+
             # Cleanup
             rm -rf "${RELEASE_TMP}"
 
@@ -115,4 +190,21 @@ jobs:
             systemctl start risu-server
             nginx -t && systemctl reload nginx
 
+            # Record release metadata into database
+            if [[ -x /usr/local/bin/risu-release-recorder && -f /etc/risu/config.yaml ]]; then
+              RISU_CONFIG=/etc/risu/config.yaml /usr/local/bin/risu-release-recorder deploy \
+                --release-id "${RELEASE_ID}" \
+                --branch "release" \
+                --before-sha "${BEFORE_SHA}" \
+                --after-sha "${AFTER_SHA}" \
+                --artifact-path "${CURRENT_RELEASE_DIR}" \
+                --diff-file "${CURRENT_RELEASE_DIR}/CHANGELOG.txt" \
+                --status "deployed"
+            fi
+
             echo "Deploy finished at $(date)"
+            echo "Release ID: ${RELEASE_ID}"
+            if [[ -n "${PREVIOUS_RELEASE_ID}" ]]; then
+              echo "Previous Release ID: ${PREVIOUS_RELEASE_ID}"
+            fi
+            echo "Rollback command: sudo risu-rollback ${RELEASE_ID}"

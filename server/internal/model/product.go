@@ -23,6 +23,7 @@ type Product struct {
 	ModelRotationY     float64   `json:"model_rotation_y"`
 	ModelRotationZ     float64   `json:"model_rotation_z"`
 	SortOrder          int       `gorm:"default:0" json:"sort_order"`
+	IsDefault          bool      `gorm:"default:false;index" json:"is_default"`
 	IsPublished        bool      `gorm:"default:false" json:"is_published"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`

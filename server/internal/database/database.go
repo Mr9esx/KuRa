@@ -22,6 +22,9 @@ func Open(dbPath string) (*gorm.DB, error) {
 		&model.Preset{},
 		&model.PresetItem{},
 		&model.User{},
+		&model.AnalyticsEvent{},
+		&model.ReleaseRecord{},
+		&model.ReleaseRollback{},
 	); err != nil {
 		return nil, err
 	}

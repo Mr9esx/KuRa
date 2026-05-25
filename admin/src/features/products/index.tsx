@@ -91,6 +91,7 @@ export default function Products() {
                       <TableHead>名称</TableHead>
                       <TableHead>类型</TableHead>
                       <TableHead>状态</TableHead>
+                      <TableHead>默认框体</TableHead>
                       <TableHead>排序</TableHead>
                       <TableHead className='text-right'>操作</TableHead>
                     </TableRow>
@@ -117,6 +118,15 @@ export default function Products() {
                             {item.is_published ? '已发布' : '草稿'}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          {item.type === 'block' ? (
+                            <Badge variant={item.is_default ? 'default' : 'outline'}>
+                              {item.is_default ? '是' : '否'}
+                            </Badge>
+                          ) : (
+                            <span className='text-muted-foreground'>-</span>
+                          )}
+                        </TableCell>
                         <TableCell>{item.sort_order}</TableCell>
                         <TableCell className='text-right space-x-1'>
                           <Button
@@ -138,7 +148,7 @@ export default function Products() {
                     ))}
                     {items.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className='h-24 text-center'>
+                        <TableCell colSpan={8} className='h-24 text-center'>
                           暂无数据
                         </TableCell>
                       </TableRow>

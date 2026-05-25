@@ -19,6 +19,7 @@ export interface CatalogItem {
 
 export interface BlockCatalogItem extends CatalogItem {
   type: "block"
+  isDefault?: boolean
   innerSize: [number, number] // [width, depth] mm
   cellGrid: [number, number] // [cols, rows]
   modelPath: string

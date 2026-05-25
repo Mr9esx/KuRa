@@ -1452,6 +1452,9 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
     failed: false,
   })
   const { data: catalogData } = useCatalog()
+  const setBlock = useEditorStore((s) => s.setBlock)
+  const currentBlockSku = useEditorStore((s) => s.block.sku)
+  const placementsCount = useEditorStore((s) => s.placements.length)
   const applyPreset = useEditorStore((s) => s.applyPreset)
   const selectedCatalogSku = useEditorStore((s) => s.selectedCatalogSku)
   const setHoveredCell = useEditorStore((s) => s.setHoveredCell)
@@ -1459,6 +1462,7 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const cameraRef = useRef<THREE.Camera | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const presetAppliedByQueryRef = useRef(false)
+  const defaultBlockAppliedRef = useRef(false)
   const lastDragClientRef = useRef<{ x: number; y: number } | null>(null)
   const pointerPlaceStartRef = useRef<{ x: number; y: number } | null>(null)
   const pointerPlaceMovedRef = useRef(false)
@@ -1648,6 +1652,20 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
       cleanupTouch()
     }
   }, [resolveDropCell, setHoveredCell, placeItemBySku, mobile])
+
+  useEffect(() => {
+    if (defaultBlockAppliedRef.current) return
+    if (!catalogData || catalogData.blocks.length === 0) return
+
+    const defaultBlock = catalogData.blocks.find((b) => b.isDefault) ?? catalogData.blocks[0]
+    if (!defaultBlock) return
+
+    // Initialize from backend-provided default block when editor is still empty.
+    if (placementsCount === 0 && currentBlockSku !== defaultBlock.sku) {
+      setBlock(defaultBlock)
+    }
+    defaultBlockAppliedRef.current = true
+  }, [catalogData, currentBlockSku, placementsCount, setBlock])
 
   useEffect(() => {
     if (presetAppliedByQueryRef.current) return

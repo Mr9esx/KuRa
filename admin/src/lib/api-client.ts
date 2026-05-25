@@ -68,6 +68,7 @@ export interface Product {
   model_rotation_y: number
   model_rotation_z: number
   sort_order: number
+  is_default: boolean
   is_published: boolean
   created_at: string
   updated_at: string
@@ -90,6 +91,96 @@ export interface Preset {
   block_sku: string
   is_published: boolean
   items: { product_sku: string; cell_x: number; cell_y: number }[]
+}
+
+export interface AnalyticsTrendPoint {
+  date: string
+  events: number
+  visitors: number
+  sessions: number
+}
+
+export interface AnalyticsNamedCount {
+  name: string
+  count: number
+}
+
+export interface AnalyticsRecentEvent {
+  id: number
+  event_name: string
+  page_path: string
+  device_type: string
+  city: string
+  ip: string
+  occurred_at: string
+}
+
+export interface AnalyticsGeoHotspot {
+  country: string
+  region: string
+  city: string
+  lat: number | null
+  lng: number | null
+  count: number
+}
+
+export interface AnalyticsOverviewResponse {
+  days: number
+  summary: {
+    events: number
+    unique_users: number
+    unique_visitors: number
+    sessions: number
+    avg_events_per_session: number
+    last_24h_events: number
+    last_24h_active_visitors: number
+  }
+  trend: AnalyticsTrendPoint[]
+  top_pages: AnalyticsNamedCount[]
+  top_events: AnalyticsNamedCount[]
+  devices: AnalyticsNamedCount[]
+  geo_hotspots: AnalyticsGeoHotspot[]
+  recent_events: AnalyticsRecentEvent[]
+}
+
+export interface ReleaseRecord {
+  id: number
+  release_id: string
+  branch: string
+  before_sha: string
+  after_sha: string
+  artifact_path: string
+  diff_summary: string
+  status: 'deployed' | 'rolled_back' | 'failed' | string
+  deployed_at: string
+  rolled_back_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReleaseRollbackRecord {
+  id: number
+  from_release_id: string
+  to_release_id: string
+  operator: string
+  reason: string
+  created_at: string
+}
+
+export interface PublishPreview {
+  files_to_copy: string[]
+  files_to_delete: string[]
+  generated_at: string
+  diff_summary: string
+}
+
+export interface PublishSummary {
+  files_copied: number
+  files_deleted: number
+  published_at: string
+  files_to_copy?: string[]
+  files_to_delete?: string[]
+  diff_summary?: string
 }
 
 export const products = {
@@ -138,8 +229,29 @@ export const upload = {
 }
 
 export const publish = {
+  preview: () =>
+    api.get<{ success: boolean; preview: PublishPreview }>('/admin/publish/preview'),
   execute: () =>
-    api.post<{ success: boolean; summary: { files_copied: number; files_deleted: number; published_at: string } }>(
-      '/admin/publish'
-    ),
+    api.post<{ success: boolean; summary: PublishSummary; release?: ReleaseRecord | null }>('/admin/publish', {
+      confirm: true,
+    }),
+}
+
+export const release = {
+  list: (limit = 50) => api.get<ReleaseRecord[]>(`/admin/releases?limit=${limit}`),
+  get: (releaseID: string) =>
+    api.get<ReleaseRecord>(`/admin/releases/${encodeURIComponent(releaseID)}`),
+  rollback: (payload: {
+    from_release_id: string
+    to_release_id: string
+    operator?: string
+    reason?: string
+  }) => api.post<ReleaseRollbackRecord>('/admin/releases/rollbacks', payload),
+  listRollbacks: (limit = 50) =>
+    api.get<ReleaseRollbackRecord[]>(`/admin/releases/rollbacks?limit=${limit}`),
+}
+
+export const analytics = {
+  overview: (days = 30) =>
+    api.get<AnalyticsOverviewResponse>(`/admin/analytics/overview?days=${days}`),
 }

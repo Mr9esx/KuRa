@@ -2,8 +2,10 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "@/styles/globals.css"
 import { APP_TAB_TITLE } from "@/config/brand"
+import { trackEvent } from "@/lib/analytics"
 
 document.title = APP_TAB_TITLE
+trackEvent("page_view")
 
 async function resolveEntry() {
   if (window.location.pathname === "/tools/item-card") {

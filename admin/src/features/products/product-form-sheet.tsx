@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -39,6 +40,7 @@ const EMPTY_FORM = {
   grid_rows: 1,
   height: 0,
   sort_order: 0,
+  is_default: false,
   is_published: false,
 }
 
@@ -67,6 +69,7 @@ export function ProductFormSheet({
         grid_rows: product.grid_rows,
         height: product.height,
         sort_order: product.sort_order,
+        is_default: product.is_default,
         is_published: product.is_published,
       })
     } else {
@@ -85,6 +88,9 @@ export function ProductFormSheet({
     setSaving(true)
     try {
       const payload: Record<string, unknown> = { ...form }
+      if (form.type !== 'block') {
+        payload.is_default = false
+      }
 
       if (modelFile) {
         const res = await upload.model(modelFile, form.type)
@@ -231,6 +237,24 @@ export function ProductFormSheet({
               />
             </div>
           </div>
+
+          {form.type === 'block' && (
+            <div className='flex items-center justify-between rounded-md border p-3'>
+              <div className='space-y-1'>
+                <Label htmlFor='is_default'>默认框体</Label>
+                <p className='text-xs text-muted-foreground'>
+                  仅允许一个默认框体，设置后会自动取消其他框体默认状态。
+                </p>
+              </div>
+              <Switch
+                id='is_default'
+                checked={form.is_default}
+                onCheckedChange={(checked) =>
+                  setForm({ ...form, is_default: checked })
+                }
+              />
+            </div>
+          )}
 
           <div className='grid grid-cols-2 gap-4'>
             <div className='space-y-2'>
