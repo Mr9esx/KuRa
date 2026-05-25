@@ -42,7 +42,7 @@ cat ~/.ssh/deploy_key
 ## 3. 服务器目标结构
 
 - 网站目录：`/var/www/miaoplus.com/dist`
-- Nginx 配置：`/etc/nginx/conf.d/miaoplus.com.conf`
+- Nginx 配置：`/etc/nginx/sites-enabled/miaoplus.com.conf`
 - 站点域名：`miaoplus.com`、`kura.miaoplus.com`
 
 ## 4. 手动兜底部署（可选）

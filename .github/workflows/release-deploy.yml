@@ -181,7 +181,8 @@ jobs:
             cp "${RELEASE_TMP}/deploy/systemd/risu-server.service" /etc/systemd/system/risu-server.service
             systemctl daemon-reload
 
-            # Deploy nginx config
+            # Deploy nginx config (remove legacy duplicates that cause server_name conflicts)
+            rm -f /etc/nginx/conf.d/miaoplus.com.conf
             cp "${RELEASE_TMP}/deploy/nginx/miaoplus.com.conf" /etc/nginx/sites-available/miaoplus.com.conf
             ln -sf /etc/nginx/sites-available/miaoplus.com.conf /etc/nginx/sites-enabled/miaoplus.com.conf
 

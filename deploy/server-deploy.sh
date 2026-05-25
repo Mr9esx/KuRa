@@ -48,8 +48,10 @@ systemctl daemon-reload
 systemctl enable risu-server
 systemctl start risu-server
 
-# Nginx config
-cp "$(dirname "$0")/nginx/${DOMAIN}.conf" "/etc/nginx/conf.d/${DOMAIN}.conf"
+# Nginx config (use sites-enabled; remove legacy conf.d duplicate)
+rm -f "/etc/nginx/conf.d/${DOMAIN}.conf"
+cp "$(dirname "$0")/nginx/${DOMAIN}.conf" "/etc/nginx/sites-available/${DOMAIN}.conf"
+ln -sf "/etc/nginx/sites-available/${DOMAIN}.conf" "/etc/nginx/sites-enabled/${DOMAIN}.conf"
 nginx -t
 systemctl reload nginx
 
