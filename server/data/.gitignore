@@ -1,0 +1,4 @@
+*.db
+models/
+images/
+!.gitignore

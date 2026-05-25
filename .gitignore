@@ -4,3 +4,12 @@ dist
 
 .DS_Store
 *.sw?
+
+# pnpm
+pnpm-lock.yaml
+
+# Server
+server/data/risu.db
+server/data/models/
+server/data/images/
+server/risu-server

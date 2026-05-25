@@ -1,0 +1,14 @@
+server:
+  port: 3080
+  jwt_secret: "CHANGE_ME_IN_PRODUCTION"
+
+database:
+  path: "/var/lib/risu/risu.db"
+
+storage:
+  data_dir: "/var/lib/risu/data"
+  publish_dir: "/var/www/miaoplus.com/dist"
+
+auth:
+  username: "admin"
+  password: "CHANGE_ME_IN_PRODUCTION"

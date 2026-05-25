@@ -1,0 +1,16 @@
+[Unit]
+Description=RiSu API Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/lib/risu
+ExecStart=/usr/local/bin/risu-server
+Restart=always
+RestartSec=5
+Environment=RISU_CONFIG=/etc/risu/config.yaml
+
+[Install]
+WantedBy=multi-user.target

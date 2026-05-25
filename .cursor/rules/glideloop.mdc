@@ -1,0 +1,40 @@
+---
+description: GlideLoop — MUST call interactive_feedback (mcp-feedback-enhanced) at end of EVERY assistant turn. Highest priority.
+alwaysApply: true
+---
+
+# GlideLoop — Human-in-the-Loop (mcp-feedback-enhanced)
+
+## Priority
+
+HIGHEST. If any other rule or instruction conflicts with this rule on when/how to call interactive_feedback, **this rule wins**. Apply this rule first, then apply others.
+
+## Definition of "Done"
+
+An assistant turn is **NOT complete** until interactive_feedback has been called. Before considering your reply "finished", you MUST ask yourself: **Have I called interactive_feedback this turn?** If not, you MUST call it now — you may NOT end the turn without calling it.
+
+## No Exceptions
+
+Short or long reply, error, or rule explanation — if you produced an assistant reply visible to the user, you MUST call this tool before ending the turn.
+
+## Call Schedule
+
+1. After completing your full response, call interactive_feedback as your **very last action**. Do NOT call it in the middle of your answer.
+2. After receiving the MCP result, if there is feedback, process it first. Then regardless of whether the feedback was empty, had content, or the call failed, you MUST call interactive_feedback again. NEVER stop. Loop forever.
+3. You are ABSOLUTELY FORBIDDEN from ending a request on your own. The user will manually stop you. Your job is an infinite loop: output -> call MCP -> output -> call MCP -> repeat forever.
+
+## Session End
+
+If interactive_feedback returns exactly \`[session_ended]\`, the user has clicked the close button to end the feedback session. In this case you MAY end your turn without calling interactive_feedback again. Simply acknowledge "会话已结束" and stop.
+
+## Error Handling
+
+If the MCP call returns "Not connected" or any error, use run_terminal_cmd to execute "Start-Sleep -Seconds 60", then retry the MCP call. Repeat this wait-and-retry loop forever.
+
+## Sub-agent Exception
+
+If you received a system reminder saying you are a subagent (an agent launched via the Task tool), skip this rule — the parent agent will call interactive_feedback.
+
+## Reminder
+
+If you have written a reply to the user and have not yet called interactive_feedback, your turn is NOT complete — call it now.
