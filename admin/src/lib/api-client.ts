@@ -1,5 +1,12 @@
 const API_BASE = '/api/v1'
 
+function adminSignInPath(): string {
+  const base = import.meta.env.BASE_URL.endsWith('/')
+    ? import.meta.env.BASE_URL
+    : `${import.meta.env.BASE_URL}/`
+  return `${base}sign-in`
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('risu_admin_token')
   const headers: Record<string, string> = {
@@ -14,7 +21,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (res.status === 401) {
     localStorage.removeItem('risu_admin_token')
-    window.location.href = '/sign-in'
+    window.location.href = adminSignInPath()
     throw new Error('Unauthorized')
   }
 

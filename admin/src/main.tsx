@@ -76,6 +76,7 @@ const queryClient = new QueryClient({
 const router = createRouter({
   routeTree,
   context: { queryClient },
+  basepath: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
 })
