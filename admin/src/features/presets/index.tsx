@@ -55,7 +55,7 @@ export default function Presets() {
 
   return (
     <>
-      <Header sticky>
+      <Header fixed>
         <div className='flex items-center justify-between w-full'>
           <h1 className='text-2xl font-bold'>预设方案</h1>
           <Button size='sm' onClick={handleCreate}>

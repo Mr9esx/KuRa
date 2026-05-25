@@ -36,7 +36,7 @@ export default function Publish() {
 
   return (
     <>
-      <Header sticky>
+      <Header fixed>
         <h1 className='text-2xl font-bold'>发布管理</h1>
       </Header>
       <Main>

@@ -62,7 +62,7 @@ export default function Categories() {
 
   return (
     <>
-      <Header sticky>
+      <Header fixed>
         <div className='flex items-center justify-between w-full'>
           <h1 className='text-2xl font-bold'>分类管理</h1>
           <Button size='sm' onClick={handleCreate}>
