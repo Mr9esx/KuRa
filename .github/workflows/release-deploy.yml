@@ -171,6 +171,12 @@ jobs:
               cp "${RELEASE_TMP}/deploy/config.production.yaml" /etc/risu/config.yaml
             fi
 
+            # Ensure SQLite and upload directories exist before service start
+            mkdir -p /var/lib/risu/data
+            chown -R www-data:www-data /var/lib/risu
+            chmod 750 /var/lib/risu
+            chmod 750 /var/lib/risu/data
+
             # Deploy systemd service
             cp "${RELEASE_TMP}/deploy/systemd/risu-server.service" /etc/systemd/system/risu-server.service
             systemctl daemon-reload
