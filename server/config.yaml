@@ -8,6 +8,7 @@ database:
 storage:
   data_dir: "./data"
   publish_dir: "../app/public"
+  geoip_db: "./internal/geo/data/GeoLite2-City.mmdb"
 
 auth:
   username: "admin"

@@ -8,6 +8,7 @@ database:
 storage:
   data_dir: "/var/lib/risu/data"
   publish_dir: "/var/www/miaoplus.com/dist"
+  geoip_db: "/var/lib/risu/GeoLite2-City.mmdb"
 
 auth:
   username: "admin"

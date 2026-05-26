@@ -51,7 +51,7 @@ func main() {
 		ArtifactPath:   cfg.Storage.PublishDir,
 	}
 	releaseHandler := &handler.ReleaseHandler{Service: releaseSvc}
-	analyticsHandler := &handler.AnalyticsHandler{DB: db, Resolver: geo.NewResolver()}
+	analyticsHandler := &handler.AnalyticsHandler{DB: db, Resolver: geo.NewResolver(cfg.Storage.GeoIPDB)}
 
 	e := echo.New()
 	e.Use(echoMiddleware.Logger())

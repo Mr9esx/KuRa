@@ -46,8 +46,14 @@ type rawEntry struct {
 	Lng     float64 `json:"lng"`
 }
 
-func NewResolver() *Resolver {
-	reader := openMMDB()
+func NewResolver(mmdbPath ...string) *Resolver {
+	var reader *maxminddb.Reader
+	if len(mmdbPath) > 0 && mmdbPath[0] != "" {
+		reader = openMMDBAt(mmdbPath[0])
+	}
+	if reader == nil {
+		reader = openMMDB()
+	}
 
 	var raws []rawEntry
 	if err := json.Unmarshal(geoLiteRaw, &raws); err != nil {
@@ -150,6 +156,20 @@ func chooseLocalizedName(names map[string]string) string {
 	return ""
 }
 
+func openMMDBAt(path string) *maxminddb.Reader {
+	if path == "" {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	db, err := maxminddb.Open(path)
+	if err != nil {
+		return nil
+	}
+	return db
+}
+
 func openMMDB() *maxminddb.Reader {
 	candidates := []string{
 		"internal/geo/data/GeoLite2-City.mmdb",
@@ -165,11 +185,7 @@ func openMMDB() *maxminddb.Reader {
 				abs = filepath.Join(wd, p)
 			}
 		}
-		if _, err := os.Stat(abs); err != nil {
-			continue
-		}
-		db, err := maxminddb.Open(abs)
-		if err == nil {
+		if db := openMMDBAt(abs); db != nil {
 			return db
 		}
 	}

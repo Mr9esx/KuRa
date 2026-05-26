@@ -18,6 +18,7 @@ type DatabaseConfig struct {
 type StorageConfig struct {
 	DataDir    string `yaml:"data_dir"`
 	PublishDir string `yaml:"publish_dir"`
+	GeoIPDB   string `yaml:"geoip_db"`
 }
 
 type AuthConfig struct {

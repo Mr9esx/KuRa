@@ -94,6 +94,7 @@ jobs:
             admin/dist \
             server/risu-server \
             server/risu-release-recorder \
+            server/internal/geo/data/GeoLite2-City.mmdb \
             release-meta \
             deploy/
 
@@ -142,6 +143,9 @@ jobs:
             cp -a "${RELEASE_TMP}/admin/dist" "${CURRENT_RELEASE_DIR}/admin"
             cp "${RELEASE_TMP}/server/risu-server" "${CURRENT_RELEASE_DIR}/server/risu-server"
             cp "${RELEASE_TMP}/server/risu-release-recorder" "${CURRENT_RELEASE_DIR}/server/risu-release-recorder"
+            if [ -f "${RELEASE_TMP}/server/internal/geo/data/GeoLite2-City.mmdb" ]; then
+              cp "${RELEASE_TMP}/server/internal/geo/data/GeoLite2-City.mmdb" "${CURRENT_RELEASE_DIR}/server/GeoLite2-City.mmdb"
+            fi
             cp -a "${RELEASE_TMP}/release-meta" "${CURRENT_RELEASE_DIR}/meta"
             cp "${RELEASE_TMP}/release-meta/deploy-diff.txt" "${CURRENT_RELEASE_DIR}/CHANGELOG.txt"
             echo "${RELEASE_ID}" > "${RELEASES_DIR}/LATEST"
@@ -169,6 +173,16 @@ jobs:
             mkdir -p /etc/risu
             if [ ! -f /etc/risu/config.yaml ]; then
               cp "${RELEASE_TMP}/deploy/config.production.yaml" /etc/risu/config.yaml
+            fi
+
+            # Ensure geoip_db is in production config
+            if ! grep -q 'geoip_db' /etc/risu/config.yaml 2>/dev/null; then
+              sed -i '/publish_dir:/a\  geoip_db: "/var/lib/risu/GeoLite2-City.mmdb"' /etc/risu/config.yaml
+            fi
+
+            # Deploy GeoIP database
+            if [ -f "${CURRENT_RELEASE_DIR}/server/GeoLite2-City.mmdb" ]; then
+              cp "${CURRENT_RELEASE_DIR}/server/GeoLite2-City.mmdb" /var/lib/risu/GeoLite2-City.mmdb
             fi
 
             # Ensure SQLite and upload directories exist before service start
