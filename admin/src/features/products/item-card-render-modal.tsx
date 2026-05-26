@@ -26,13 +26,9 @@ import {
   applyLightSetup,
   exportImage,
   LIGHT_PRESETS,
-  EDGE_PRESETS,
   DEFAULT_LIGHT_SETUP,
-  DEFAULT_EDGE_SETUP,
   type SceneContext,
   type LightPresetId,
-  type EdgePresetId,
-  type EdgeRenderMode,
   type ExportFormat,
   type ModelRenderOptions,
   type CameraRenderOptions,
@@ -82,31 +78,17 @@ export function ItemCardRenderModal({
   const [keyI, setKeyI] = useState(DEFAULT_LIGHT_SETUP.key)
   const [fillI, setFillI] = useState(DEFAULT_LIGHT_SETUP.fill)
 
-  const [edgePreset, setEdgePreset] =
-    useState<EdgePresetId>('productOutline')
-  const [edgeMode, setEdgeMode] = useState<EdgeRenderMode>(
-    DEFAULT_EDGE_SETUP.mode
-  )
-  const [edgeColorHex, setEdgeColorHex] = useState(DEFAULT_EDGE_SETUP.colorHex)
-  const [edgeWidthPx, setEdgeWidthPx] = useState(DEFAULT_EDGE_SETUP.widthPx)
-  const [hardEdgeThresholdDeg, setHardEdgeThresholdDeg] = useState(
-    DEFAULT_EDGE_SETUP.hardEdgeThresholdDeg
-  )
-
   const modelRenderOptions = useMemo<ModelRenderOptions>(
     () => ({
       modelRotationDeg: [rotX, rotY, rotZ],
       fillRatio,
       colorHex: modelColorHex,
-      edgeMode,
-      edgeColorHex,
-      edgeWidthPx,
-      hardEdgeThresholdDeg,
+      edgeMode: 'none' as const,
+      edgeColorHex: '#000000',
+      edgeWidthPx: 0,
+      hardEdgeThresholdDeg: 68,
     }),
-    [
-      rotX, rotY, rotZ, fillRatio, modelColorHex,
-      edgeMode, edgeColorHex, edgeWidthPx, hardEdgeThresholdDeg,
-    ]
+    [rotX, rotY, rotZ, fillRatio, modelColorHex]
   )
 
   const cameraRenderOptions = useMemo<CameraRenderOptions>(
@@ -197,16 +179,6 @@ export function ItemCardRenderModal({
     setKeyI(p.values.key)
     setFillI(p.values.fill)
   }, [lightPreset])
-
-  // Edge preset sync
-  useEffect(() => {
-    if (edgePreset === 'custom') return
-    const p = EDGE_PRESETS[edgePreset]
-    setEdgeMode(p.mode)
-    setEdgeColorHex(p.colorHex)
-    setEdgeWidthPx(p.widthPx)
-    setHardEdgeThresholdDeg(p.hardEdgeThresholdDeg)
-  }, [edgePreset])
 
   // Drag to rotate POV
   const dragRef = useRef({
@@ -495,112 +467,6 @@ export function ItemCardRenderModal({
                   }}
                 />
               </div>
-            </div>
-
-            {/* Edge preset */}
-            <div>
-              <Label className='text-xs'>描边预设</Label>
-              <Select
-                value={edgePreset}
-                onValueChange={(v) => setEdgePreset(v as EdgePresetId)}
-              >
-                <SelectTrigger className='mt-1 h-8 text-xs'>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='productOutline'>
-                    {EDGE_PRESETS.productOutline.label}
-                  </SelectItem>
-                  <SelectItem value='structure'>
-                    {EDGE_PRESETS.structure.label}
-                  </SelectItem>
-                  <SelectItem value='technical'>
-                    {EDGE_PRESETS.technical.label}
-                  </SelectItem>
-                  <SelectItem value='custom'>自定义</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Edge mode */}
-            <div>
-              <Label className='text-xs'>描边模式</Label>
-              <Select
-                value={edgeMode}
-                onValueChange={(v) => {
-                  setEdgePreset('custom')
-                  setEdgeMode(v as EdgeRenderMode)
-                }}
-              >
-                <SelectTrigger className='mt-1 h-8 text-xs'>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>关闭</SelectItem>
-                  <SelectItem value='hardEdges'>轮廓硬边</SelectItem>
-                  <SelectItem value='wireframe'>框架线</SelectItem>
-                  <SelectItem value='cad'>建模线</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {edgeMode === 'hardEdges' && (
-              <div>
-                <Label className='text-[10px]'>
-                  硬边阈值（{hardEdgeThresholdDeg}°）
-                </Label>
-                <Slider
-                  min={1}
-                  max={180}
-                  step={1}
-                  value={[hardEdgeThresholdDeg]}
-                  onValueChange={([v]) => {
-                    setEdgePreset('custom')
-                    setHardEdgeThresholdDeg(v!)
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Edge color + width */}
-            <div>
-              <Label className='text-xs'>边线颜色</Label>
-              <div className='mt-1 flex gap-2'>
-                <input
-                  type='text'
-                  value={edgeColorHex}
-                  onChange={(e) => {
-                    setEdgePreset('custom')
-                    setEdgeColorHex(e.target.value.toUpperCase())
-                  }}
-                  className='flex-1 rounded-md border bg-background px-2 py-1 text-xs uppercase'
-                />
-                <input
-                  type='color'
-                  value={edgeColorHex}
-                  onChange={(e) => {
-                    setEdgePreset('custom')
-                    setEdgeColorHex(e.target.value.toUpperCase())
-                  }}
-                  className='h-8 w-8 shrink-0 cursor-pointer rounded border p-0.5'
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className='text-[10px]'>
-                边线粗细（{edgeWidthPx.toFixed(1)}px）
-              </Label>
-              <Slider
-                min={0.5}
-                max={6}
-                step={0.1}
-                value={[edgeWidthPx]}
-                onValueChange={([v]) => {
-                  setEdgePreset('custom')
-                  setEdgeWidthPx(v!)
-                }}
-              />
             </div>
 
             {/* Composition offset */}
