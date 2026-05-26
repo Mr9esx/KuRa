@@ -1,31 +1,22 @@
-import { useEffect, useRef } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { useTheme } from '@/context/theme-provider'
+import {
+  Map,
+  MapMarker,
+  MarkerContent,
+  MarkerTooltip,
+  MapControls,
+  MapHeatmap,
+  wgs84ToGcj02,
+  type HeatmapPoint,
+} from 'amapcn'
 import type { AnalyticsGeoHotspot } from '@/lib/api-client'
 
-const LIGHT_TILES =
-  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-const DARK_TILES =
-  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-const ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
-
-function markerRadius(count: number, max: number) {
-  if (max <= 0) return 5
-  return 5 + (count / max) * 15
-}
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY as string | undefined
 
 export function GeoHotspotMap({
   hotspots,
 }: {
   hotspots: AnalyticsGeoHotspot[]
 }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<L.Map | null>(null)
-  const tileRef = useRef<L.TileLayer | null>(null)
-  const { theme } = useTheme()
-
   const filtered = hotspots.filter(
     (item) =>
       typeof item.lat === 'number' &&
@@ -39,71 +30,84 @@ export function GeoHotspotMap({
     0
   )
 
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
+  const heatmapData: HeatmapPoint[] = filtered.map((item) => {
+    const [lng, lat] = wgs84ToGcj02(item.lng as number, item.lat as number)
+    return { lng, lat, count: item.count }
+  })
 
-    const map = L.map(containerRef.current, {
-      center: [30, 105],
-      zoom: 3,
-      zoomControl: true,
-      attributionControl: true,
-      scrollWheelZoom: true,
-    })
-
-    const isDark = theme === 'dark'
-    const tile = L.tileLayer(isDark ? DARK_TILES : LIGHT_TILES, {
-      attribution: ATTRIBUTION,
-      maxZoom: 18,
-    }).addTo(map)
-
-    tileRef.current = tile
-    mapRef.current = map
-
-    return () => {
-      map.remove()
-      mapRef.current = null
-      tileRef.current = null
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (!tileRef.current) return
-    const isDark = theme === 'dark'
-    tileRef.current.setUrl(isDark ? DARK_TILES : LIGHT_TILES)
-  }, [theme])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    map.eachLayer((layer) => {
-      if (layer instanceof L.CircleMarker) map.removeLayer(layer)
-    })
-
-    for (const item of filtered) {
-      const r = markerRadius(item.count, maxCount)
-      L.circleMarker([item.lat as number, item.lng as number], {
-        radius: r,
-        fillColor: '#3b82f6',
-        fillOpacity: 0.55,
-        color: '#2563eb',
-        weight: 1.5,
-      })
-        .bindPopup(
-          `<strong>${item.city}</strong><br/>${item.country} · ${item.region}<br/>访问 ${item.count} 次`
-        )
-        .addTo(map)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length, maxCount])
+  const markerSize = (count: number) => {
+    if (maxCount <= 0) return 10
+    return 10 + (count / maxCount) * 20
+  }
 
   return (
     <div className='space-y-3'>
-      <div
-        ref={containerRef}
-        className='h-[340px] w-full overflow-hidden rounded-lg border border-border'
-      />
+      <div className='h-[340px] w-full overflow-hidden rounded-lg border border-border'>
+        <Map
+          amapKey={AMAP_KEY}
+          center={[105, 30]}
+          zoom={4}
+          className='h-full w-full'
+        >
+          <MapControls
+            position='top-right'
+            showZoom
+            showCompass={false}
+            showLocate={false}
+            showFullscreen={false}
+          />
+
+          {filtered.length > 5 ? (
+            <MapHeatmap
+              data={heatmapData}
+              radius={25}
+              opacity={0.7}
+              max={maxCount}
+              gradient={{
+                '0.4': '#3b82f6',
+                '0.65': '#8b5cf6',
+                '0.85': '#ef4444',
+                '1.0': '#f97316',
+              }}
+            />
+          ) : null}
+
+          {filtered.map((item) => {
+            const [lng, lat] = wgs84ToGcj02(
+              item.lng as number,
+              item.lat as number
+            )
+            const size = markerSize(item.count)
+            return (
+              <MapMarker
+                key={`${item.city}-${item.lat}-${item.lng}`}
+                longitude={lng}
+                latitude={lat}
+              >
+                <MarkerContent>
+                  <div
+                    className='rounded-full border-2 border-white bg-blue-500 shadow-md'
+                    style={{
+                      width: `${size}px`,
+                      height: `${size}px`,
+                      opacity: 0.75,
+                    }}
+                  />
+                </MarkerContent>
+                <MarkerTooltip>
+                  <div className='text-xs'>
+                    <strong>{item.city}</strong>
+                    <br />
+                    {item.country} · {item.region}
+                    <br />
+                    访问 {item.count} 次
+                  </div>
+                </MarkerTooltip>
+              </MapMarker>
+            )
+          })}
+        </Map>
+      </div>
 
       {filtered.length === 0 ? (
         <p className='text-sm text-muted-foreground'>

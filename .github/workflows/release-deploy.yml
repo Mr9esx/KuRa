@@ -34,6 +34,8 @@ jobs:
 
       - name: Build admin panel
         run: pnpm --filter admin build
+        env:
+          VITE_AMAP_KEY: ${{ secrets.VITE_AMAP_KEY }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
