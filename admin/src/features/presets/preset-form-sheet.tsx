@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
-import { presets, type Preset } from '@/lib/api-client'
+import { presets, upload, type Preset } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2 } from 'lucide-react'
+import { ImageIcon, Loader2, Upload } from 'lucide-react'
 
 interface PresetFormSheetProps {
   open: boolean
@@ -36,6 +36,9 @@ export function PresetFormSheet({
     is_published: false,
   })
   const [saving, setSaving] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const isEdit = !!preset
 
@@ -48,6 +51,7 @@ export function PresetFormSheet({
         block_sku: preset.block_sku,
         is_published: preset.is_published,
       })
+      setImagePreview(preset.image ? `/files/${preset.image}` : null)
     } else {
       setForm({
         preset_id: '',
@@ -56,8 +60,24 @@ export function PresetFormSheet({
         block_sku: '',
         is_published: false,
       })
+      setImagePreview(null)
     }
+    setImageFile(null)
   }, [preset, open])
+
+  const handleImageFileChange = useCallback(
+    (file: File | null) => {
+      setImageFile(file)
+      if (file) {
+        setImagePreview(URL.createObjectURL(file))
+      } else if (preset?.image) {
+        setImagePreview(`/files/${preset.image}`)
+      } else {
+        setImagePreview(null)
+      }
+    },
+    [preset]
+  )
 
   const handleSubmit = async () => {
     if (!form.preset_id || !form.name || !form.block_sku) {
@@ -67,11 +87,18 @@ export function PresetFormSheet({
 
     setSaving(true)
     try {
+      const payload: Record<string, unknown> = { ...form }
+
+      if (imageFile) {
+        const res = await upload.image(imageFile, imageFile.name, 'presets')
+        payload.image = res.path
+      }
+
       if (isEdit) {
-        await presets.update(preset!.id, form)
+        await presets.update(preset!.id, payload)
         toast.success('方案已更新')
       } else {
-        await presets.create(form)
+        await presets.create(payload)
         toast.success('方案已创建')
       }
       onOpenChange(false)
@@ -85,7 +112,7 @@ export function PresetFormSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-lg'>
+      <DialogContent className='sm:max-w-lg max-h-[85vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑方案' : '新增方案'}</DialogTitle>
           <DialogDescription>
@@ -94,6 +121,49 @@ export function PresetFormSheet({
         </DialogHeader>
 
         <div className='grid gap-4 py-4'>
+          {/* Image preview + upload */}
+          <div className='space-y-3'>
+            <Label>方案封面图</Label>
+            <div className='flex gap-4'>
+              <div className='flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted'>
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt='方案封面'
+                    className='h-full w-full object-contain'
+                  />
+                ) : (
+                  <ImageIcon className='h-8 w-8 text-muted-foreground' />
+                )}
+              </div>
+              <div className='flex flex-col gap-2'>
+                <input
+                  ref={imageInputRef}
+                  type='file'
+                  accept='image/*'
+                  className='hidden'
+                  onChange={(e) =>
+                    handleImageFileChange(e.target.files?.[0] || null)
+                  }
+                />
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <Upload className='mr-2 h-4 w-4' />
+                  上传图片
+                </Button>
+                {imageFile && (
+                  <p className='text-xs text-muted-foreground'>
+                    已选择：{imageFile.name}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className='space-y-2'>
             <Label htmlFor='preset_id'>方案 ID *</Label>
             <Input
