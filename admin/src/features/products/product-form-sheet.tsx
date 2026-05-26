@@ -105,7 +105,6 @@ export function ProductFormSheet({
   const handleRenderConfirm = useCallback(
     (file: File) => {
       handleImageFileChange(file)
-      toast.success('渲染图片已注入，点击保存即可生效')
     },
     [handleImageFileChange]
   )

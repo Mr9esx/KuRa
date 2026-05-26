@@ -572,13 +572,6 @@ async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
-function parseEmbedParams() {
-  const params = new URLSearchParams(window.location.search)
-  const embed = params.get("embed") === "1"
-  const model = params.get("model") || ""
-  return { embed, model }
-}
-
 export default function ItemCardTool() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<SceneContext | null>(null)
@@ -599,18 +592,9 @@ export default function ItemCardTool() {
     startPovY: 0,
   })
 
-  const embedParams = useMemo(parseEmbedParams, [])
-
   const makeInitialEntries = useCallback((): ModelEntry[] => {
-    if (embedParams.embed && embedParams.model) {
-      return [{
-        id: "embed-0",
-        source: embedParams.model,
-        displayName: embedParams.model.split("/").pop()?.replace(/\.3mf$/i, "") ?? "model",
-      }]
-    }
     return makeDefaultEntries()
-  }, [embedParams])
+  }, [])
 
   const [entries, setEntries] = useState<ModelEntry[]>(makeInitialEntries)
   const [activeId, setActiveId] = useState(entries[0]?.id ?? "")
@@ -804,31 +788,6 @@ export default function ItemCardTool() {
       setBusy(false)
     }
   }, [activeEntry, buildExportMetadata, exportHeight, exportWidth, renderOne, withExportSize])
-
-  const handleEmbedConfirm = useCallback(async () => {
-    if (!canvasRef.current || !activeEntry) return
-    setBusy(true)
-    try {
-      const blob = await withExportSize(async () => {
-        await renderOne(activeEntry)
-        return canvasToBlob(canvasRef.current!)
-      })
-      if (!blob) throw new Error("PNG 生成失败")
-      const buffer = await blob.arrayBuffer()
-      const base64 = btoa(
-        new Uint8Array(buffer).reduce((s, b) => s + String.fromCharCode(b), ""),
-      )
-      window.parent.postMessage(
-        { type: "item-card-result", base64, width: exportWidth, height: exportHeight },
-        "*",
-      )
-      setStatus("已发送渲染结果")
-    } catch (e) {
-      setStatus(`渲染失败：${String(e)}`)
-    } finally {
-      setBusy(false)
-    }
-  }, [activeEntry, exportHeight, exportWidth, renderOne, withExportSize])
 
   const handleDownloadZip = useCallback(async () => {
     if (!canvasRef.current || entries.length === 0) return
@@ -1031,9 +990,7 @@ export default function ItemCardTool() {
             视角固定为左前斜上（适合卡片图），PNG 透明背景。
           </p>
 
-          {!embedParams.embed && (
-            <>
-              <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex items-center gap-2">
                 <span className="text-xs text-white/80">模型列表</span>
                 <button
                   type="button"
@@ -1104,8 +1061,6 @@ export default function ItemCardTool() {
                   批量下载重命名模型（ZIP）
                 </button>
               )}
-            </>
-          )}
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <label className="text-xs text-white/80">
@@ -1405,35 +1360,22 @@ export default function ItemCardTool() {
           />
 
           <div className="mt-4 flex gap-2">
-            {embedParams.embed ? (
-              <button
-                type="button"
-                disabled={busy || !activeEntry}
-                onClick={handleEmbedConfirm}
-                className="flex-1 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {busy ? "渲染中…" : "确认使用此图片"}
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  disabled={busy || !activeEntry}
-                  onClick={handleDownloadCurrent}
-                  className="rounded-md bg-white px-3 py-2 text-xs font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  导出当前 PNG
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || entries.length === 0}
-                  onClick={handleDownloadZip}
-                  className="rounded-md border border-white/35 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  批量导出 ZIP
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              disabled={busy || !activeEntry}
+              onClick={handleDownloadCurrent}
+              className="rounded-md bg-white px-3 py-2 text-xs font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              导出当前 PNG
+            </button>
+            <button
+              type="button"
+              disabled={busy || entries.length === 0}
+              onClick={handleDownloadZip}
+              className="rounded-md border border-white/35 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              批量导出 ZIP
+            </button>
           </div>
 
           <p className="mt-3 text-xs text-white/70">{status}</p>
