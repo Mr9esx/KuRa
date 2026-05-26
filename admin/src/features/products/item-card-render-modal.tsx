@@ -120,24 +120,41 @@ export function ItemCardRenderModal({
     [ambientI, keyI, fillI]
   )
 
-  // Scene init
+  // Scene init — wait for canvas to have non-zero size (Dialog animation)
   useEffect(() => {
-    if (!open || !canvasRef.current) return
-    const ctx = createScene(canvasRef.current)
-    sceneRef.current = ctx
-    setLoaded(false)
-    setStatus('加载模型中…')
+    if (!open) return
+    let disposed = false
+    let ctx: SceneContext | null = null
 
-    const modelUrl = `/files/${modelPath}`
-    renderModelToScene(ctx, modelUrl, modelRenderOptions, cameraRenderOptions)
-      .then(() => {
-        setLoaded(true)
-        setStatus('就绪')
-      })
-      .catch((e) => setStatus(`加载失败：${String(e)}`))
+    const tryInit = () => {
+      const canvas = canvasRef.current
+      if (!canvas || disposed) return
+      if (canvas.clientWidth < 10 || canvas.clientHeight < 10) {
+        requestAnimationFrame(tryInit)
+        return
+      }
+      ctx = createScene(canvas)
+      sceneRef.current = ctx
+      setLoaded(false)
+      setStatus('加载模型中…')
+
+      const modelUrl = `/files/${modelPath}`
+      renderModelToScene(ctx, modelUrl, modelRenderOptions, cameraRenderOptions)
+        .then(() => {
+          if (disposed) return
+          setLoaded(true)
+          setStatus('就绪')
+        })
+        .catch((e) => {
+          if (!disposed) setStatus(`加载失败：${String(e)}`)
+        })
+    }
+
+    requestAnimationFrame(tryInit)
 
     return () => {
-      ctx.dispose()
+      disposed = true
+      ctx?.dispose()
       sceneRef.current = null
     }
     // only re-init when modal opens or model changes
@@ -256,7 +273,7 @@ export function ItemCardRenderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-[95vw] h-[90vh] p-0 gap-0 flex flex-col'>
+      <DialogContent className='!max-w-[98vw] !w-[98vw] h-[95vh] p-0 gap-0 flex flex-col'>
         <DialogHeader className='px-4 py-3 border-b shrink-0'>
           <DialogTitle>渲染产品图片</DialogTitle>
           <DialogDescription>
@@ -266,7 +283,7 @@ export function ItemCardRenderModal({
 
         <div className='flex flex-1 min-h-0 overflow-hidden'>
           {/* Controls panel */}
-          <div className='w-[320px] shrink-0 overflow-y-auto border-r p-4 space-y-4'>
+          <div className='w-[280px] shrink-0 overflow-y-auto border-r p-3 space-y-3'>
             {/* Export size */}
             <div className='grid grid-cols-2 gap-2'>
               <div className='space-y-1'>

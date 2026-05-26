@@ -276,19 +276,16 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
     preserveDrawingBuffer: true,
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false)
+  const w = Math.max(1, canvas.clientWidth)
+  const h = Math.max(1, canvas.clientHeight)
+  renderer.setSize(w, h, false)
   renderer.setClearColor(0x000000, 0)
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1
 
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(
-    28,
-    canvas.clientWidth / canvas.clientHeight,
-    1,
-    5000
-  )
+  const camera = new THREE.PerspectiveCamera(28, w / h, 1, 5000)
   const modelRoot = new THREE.Group()
   scene.add(modelRoot)
 
