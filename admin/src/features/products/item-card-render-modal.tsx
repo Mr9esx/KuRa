@@ -24,7 +24,7 @@ import {
   renderModelToScene,
   applyCameraPose,
   applyLightSetup,
-  exportPng,
+  exportImage,
   LIGHT_PRESETS,
   EDGE_PRESETS,
   DEFAULT_LIGHT_SETUP,
@@ -33,6 +33,7 @@ import {
   type LightPresetId,
   type EdgePresetId,
   type EdgeRenderMode,
+  type ExportFormat,
   type ModelRenderOptions,
   type CameraRenderOptions,
   type LightSetup,
@@ -63,6 +64,8 @@ export function ItemCardRenderModal({
 
   const [exportWidth, setExportWidth] = useState(1024)
   const [exportHeight, setExportHeight] = useState(1024)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
+  const [exportQuality, setExportQuality] = useState(0.85)
   const [rotX, setRotX] = useState(0)
   const [rotY, setRotY] = useState(0)
   const [rotZ, setRotZ] = useState(0)
@@ -257,19 +260,30 @@ export function ItemCardRenderModal({
     setBusy(true)
     setStatus('渲染中…')
     try {
-      const blob = await exportPng(ctx, exportWidth, exportHeight)
-      const file = new File([blob], 'rendered-product.png', {
-        type: 'image/png',
+      const blob = await exportImage(ctx, {
+        width: exportWidth,
+        height: exportHeight,
+        format: exportFormat,
+        quality: exportQuality,
       })
+      const ext = exportFormat === 'jpeg' ? 'jpg' : exportFormat
+      const mime =
+        exportFormat === 'jpeg'
+          ? 'image/jpeg'
+          : exportFormat === 'webp'
+            ? 'image/webp'
+            : 'image/png'
+      const sizeKB = (blob.size / 1024).toFixed(1)
+      const file = new File([blob], `rendered-product.${ext}`, { type: mime })
       onConfirm(file)
       onOpenChange(false)
-      toast.success('渲染图片已注入，点击保存即可生效')
+      toast.success(`渲染图片已注入（${sizeKB} KB），点击保存即可生效`)
     } catch (e) {
       setStatus(`渲染失败：${String(e)}`)
     } finally {
       setBusy(false)
     }
-  }, [exportWidth, exportHeight, onConfirm, onOpenChange])
+  }, [exportWidth, exportHeight, exportFormat, exportQuality, onConfirm, onOpenChange])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -287,7 +301,7 @@ export function ItemCardRenderModal({
         <div className='flex flex-1 min-h-0 overflow-hidden'>
           {/* Controls panel */}
           <div className='w-[280px] shrink-0 overflow-y-auto border-r p-3 space-y-3'>
-            {/* Export size */}
+            {/* Export size + format */}
             <div className='grid grid-cols-2 gap-2'>
               <div className='space-y-1'>
                 <Label className='text-xs'>导出宽度</Label>
@@ -310,6 +324,45 @@ export function ItemCardRenderModal({
                 />
               </div>
             </div>
+
+            <div>
+              <Label className='text-xs'>导出格式</Label>
+              <Select
+                value={exportFormat}
+                onValueChange={(v) => setExportFormat(v as ExportFormat)}
+              >
+                <SelectTrigger className='mt-1 h-8 text-xs'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='png'>PNG（无损 / 透明背景）</SelectItem>
+                  <SelectItem value='webp'>WebP（有损 / 体积小）</SelectItem>
+                  <SelectItem value='jpeg'>JPEG（有损 / 兼容性好）</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {exportFormat !== 'png' && (
+              <div>
+                <Label className='text-[10px]'>
+                  压缩质量（{Math.round(exportQuality * 100)}%）
+                </Label>
+                <Slider
+                  min={0.1}
+                  max={1}
+                  step={0.05}
+                  value={[exportQuality]}
+                  onValueChange={([v]) => setExportQuality(v!)}
+                />
+                <p className='mt-1 text-[10px] text-muted-foreground'>
+                  {exportQuality >= 0.9
+                    ? '高质量，文件较大'
+                    : exportQuality >= 0.7
+                      ? '推荐，质量与体积平衡'
+                      : '高压缩，画质下降明显'}
+                </p>
+              </div>
+            )}
 
             {/* Rotation */}
             <div>

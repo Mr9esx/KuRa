@@ -490,11 +490,21 @@ export async function renderModelToScene(
   applyCameraPose(ctx, cameraOptions)
 }
 
-export async function exportPng(
-  ctx: SceneContext,
-  width: number,
+export type ExportFormat = 'png' | 'jpeg' | 'webp'
+
+export interface ExportOptions {
+  width: number
   height: number
+  format?: ExportFormat
+  /** 0–1, only used for jpeg/webp. Default 0.85 */
+  quality?: number
+}
+
+export async function exportImage(
+  ctx: SceneContext,
+  options: ExportOptions
 ): Promise<Blob> {
+  const { width, height, format = 'png', quality = 0.85 } = options
   const canvas = ctx.renderer.domElement
   const prevW = canvas.width
   const prevH = canvas.height
@@ -509,11 +519,23 @@ export async function exportPng(
   updateEdgeLineResolution(ctx.modelRoot, ctx.renderer)
   ctx.renderer.render(ctx.scene, ctx.camera)
 
+  const mimeType =
+    format === 'jpeg'
+      ? 'image/jpeg'
+      : format === 'webp'
+        ? 'image/webp'
+        : 'image/png'
+  const qualityArg = format === 'png' ? undefined : quality
+
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => {
-      if (!b) reject(new Error('PNG 生成失败'))
-      else resolve(b)
-    }, 'image/png')
+    canvas.toBlob(
+      (b) => {
+        if (!b) reject(new Error('图片生成失败'))
+        else resolve(b)
+      },
+      mimeType,
+      qualityArg
+    )
   })
 
   canvas.width = prevW
