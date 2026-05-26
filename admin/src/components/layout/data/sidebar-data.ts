@@ -6,18 +6,10 @@ import {
   LayoutDashboard,
   Settings,
   ScrollText,
-  Command,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
 
 export const sidebarData: SidebarData = {
-  teams: [
-    {
-      name: 'RiSu Admin',
-      logo: Command,
-      plan: '后台管理',
-    },
-  ],
   navGroups: [
     {
       title: '管理',

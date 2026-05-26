@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/select'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import {
   analytics,
@@ -62,7 +61,6 @@ export function Events() {
       <Header>
         <div className='me-auto' />
         <ThemeSwitch />
-        <ProfileDropdown />
       </Header>
 
       <Main>
