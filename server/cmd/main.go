@@ -12,6 +12,7 @@ import (
 	"github.com/Mr9esx/RiSu/server/internal/middleware"
 	"github.com/Mr9esx/RiSu/server/internal/model"
 	"github.com/Mr9esx/RiSu/server/internal/publisher"
+	"github.com/Mr9esx/RiSu/server/internal/seeder"
 	"github.com/Mr9esx/RiSu/server/internal/service"
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
@@ -35,6 +36,7 @@ func main() {
 	}
 
 	ensureAdminUser(db, cfg)
+	seeder.SeedIfEmpty(db, cfg.Storage.PublishDir, cfg.Storage.DataDir)
 
 	productSvc := &service.ProductService{DB: db}
 	categorySvc := &service.CategoryService{DB: db}
