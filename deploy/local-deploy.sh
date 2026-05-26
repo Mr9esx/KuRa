@@ -48,16 +48,16 @@ mkdir -p "$BUILD_DIR/release-meta"
 
 #─── Step 1: Build frontend app ──────────────────────────────────
 step "Building frontend app"
-VITE_API_BASE="" pnpm --filter app build
+(cd app && VITE_API_BASE="" npx vite build)
 ok "app/dist built"
 
 #─── Step 2: Build admin panel ───────────────────────────────────
 step "Building admin panel"
 if [[ -n "$VITE_AMAP_KEY" ]]; then
-  VITE_AMAP_KEY="$VITE_AMAP_KEY" pnpm --filter admin build
+  (cd admin && VITE_AMAP_KEY="$VITE_AMAP_KEY" npx vite build)
 else
   warn "VITE_AMAP_KEY not set, geo map may not work"
-  pnpm --filter admin build
+  (cd admin && npx vite build)
 fi
 ok "admin/dist built"
 
@@ -139,16 +139,16 @@ ok "Archive: $ARCHIVE ($ARCHIVE_SIZE)"
 #─── Step 6: Upload to server ───────────────────────────────────
 step "Uploading to server ($DEPLOY_HOST)"
 
-SSH_OPTS="-i $SSH_KEY -p $DEPLOY_PORT -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
+SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
 
-scp $SSH_OPTS "$ARCHIVE" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/release.tar.gz"
+scp -P "$DEPLOY_PORT" $SSH_OPTS "$ARCHIVE" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/release.tar.gz"
 ok "Archive uploaded"
 
 #─── Step 7: Deploy on server ───────────────────────────────────
 step "Deploying on server"
 
 # shellcheck disable=SC2087
-ssh $SSH_OPTS "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<'REMOTE_SCRIPT'
+ssh -p "$DEPLOY_PORT" $SSH_OPTS "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<'REMOTE_SCRIPT'
 set -e
 
 DEPLOY_PATH="/var/www/miaoplus.com"
