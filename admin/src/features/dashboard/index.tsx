@@ -23,12 +23,23 @@ import {
   analytics,
   stats,
   type AnalyticsOverviewResponse,
+  type AnalyticsInsightsResponse,
+  type AnalyticsVisitorsResponse,
   type StatsOverview,
 } from '@/lib/api-client'
 import { AnalyticsChart } from './components/analytics-chart'
 import { GeoHotspotMap } from './components/geo-hotspot-map'
 import { RecentSales } from './components/recent-sales'
 import { TopPages } from './components/top-pages'
+import { HourlyHeatmap } from './components/hourly-heatmap'
+import { ItemPopularity } from './components/item-popularity'
+import { FunnelChart } from './components/funnel-chart'
+import {
+  NewVsReturningChart,
+  EngagementDistribution,
+  TopVisitorsTable,
+  SessionDurationCard,
+} from './components/visitor-analysis'
 
 const EMPTY_OVERVIEW: AnalyticsOverviewResponse = {
   days: 30,
@@ -49,6 +60,23 @@ const EMPTY_OVERVIEW: AnalyticsOverviewResponse = {
   recent_events: [],
 }
 
+const EMPTY_INSIGHTS: AnalyticsInsightsResponse = {
+  days: 30,
+  hourly_heatmap: [],
+  item_popularity: [],
+  funnel: { page_views: 0, item_selects: 0, item_places: 0, exports: 0 },
+}
+
+const EMPTY_VISITORS: AnalyticsVisitorsResponse = {
+  days: 30,
+  new_vs_returning: { new_visitors: 0, returning_visitors: 0 },
+  engagement: [],
+  top_visitors: [],
+  avg_session: { visible_ms: 0, total_ms: 0 },
+  browsers: [],
+  oses: [],
+}
+
 const EMPTY_STATS: StatsOverview = {
   products: {
     total: 0,
@@ -65,6 +93,10 @@ const EMPTY_STATS: StatsOverview = {
 export function Dashboard() {
   const [overview, setOverview] =
     useState<AnalyticsOverviewResponse>(EMPTY_OVERVIEW)
+  const [insights, setInsights] =
+    useState<AnalyticsInsightsResponse>(EMPTY_INSIGHTS)
+  const [visitors, setVisitors] =
+    useState<AnalyticsVisitorsResponse>(EMPTY_VISITORS)
   const [bizStats, setBizStats] = useState<StatsOverview>(EMPTY_STATS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -73,10 +105,12 @@ export function Dashboard() {
     let active = true
 
     const analyticsPromise = analytics.overview(30)
+    const insightsPromise = analytics.insights(30)
+    const visitorsPromise = analytics.visitors(30)
     const statsPromise = stats.overview()
 
-    Promise.all([analyticsPromise, statsPromise])
-      .then(([analyticsData, statsData]) => {
+    Promise.all([analyticsPromise, insightsPromise, visitorsPromise, statsPromise])
+      .then(([analyticsData, insightsData, visitorsData, statsData]) => {
         if (!active) return
         setOverview({
           ...EMPTY_OVERVIEW,
@@ -88,6 +122,23 @@ export function Dashboard() {
           devices: analyticsData.devices ?? [],
           geo_hotspots: analyticsData.geo_hotspots ?? [],
           recent_events: analyticsData.recent_events ?? [],
+        })
+        setInsights({
+          ...EMPTY_INSIGHTS,
+          ...insightsData,
+          hourly_heatmap: insightsData.hourly_heatmap ?? [],
+          item_popularity: insightsData.item_popularity ?? [],
+          funnel: { ...EMPTY_INSIGHTS.funnel, ...(insightsData.funnel ?? {}) },
+        })
+        setVisitors({
+          ...EMPTY_VISITORS,
+          ...visitorsData,
+          new_vs_returning: { ...EMPTY_VISITORS.new_vs_returning, ...(visitorsData.new_vs_returning ?? {}) },
+          engagement: visitorsData.engagement ?? [],
+          top_visitors: visitorsData.top_visitors ?? [],
+          avg_session: { ...EMPTY_VISITORS.avg_session, ...(visitorsData.avg_session ?? {}) },
+          browsers: visitorsData.browsers ?? [],
+          oses: visitorsData.oses ?? [],
         })
         setBizStats({ ...EMPTY_STATS, ...statsData })
         setError(null)
@@ -188,7 +239,128 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* 4. 三列并排 */}
+        {/* 4. 行为洞察：漏斗 + 热力图 */}
+        <div className='mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2'>
+          <Card>
+            <CardHeader>
+              <CardTitle>操作漏斗</CardTitle>
+              <CardDescription>
+                最近 {insights.days} 天 · 各阶段独立会话数
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FunnelChart data={insights.funnel} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>时段活跃热力图</CardTitle>
+              <CardDescription>
+                最近 {insights.days} 天 · 按星期和小时的会话分布
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <HourlyHeatmap data={insights.hourly_heatmap} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 访客分析 */}
+        <div className='mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3'>
+          <Card>
+            <CardHeader>
+              <CardTitle>新老访客</CardTitle>
+              <CardDescription>
+                最近 {visitors.days} 天 · 按会话数区分
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <NewVsReturningChart data={visitors.new_vs_returning} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>访客参与度</CardTitle>
+              <CardDescription>
+                最近 {visitors.days} 天 · 按交互行为分层
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <EngagementDistribution tiers={visitors.engagement} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>会话时长</CardTitle>
+              <CardDescription>
+                最近 {visitors.days} 天 · 平均可见时长 vs 总停留
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SessionDurationCard avgSession={visitors.avg_session} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 浏览器 & 系统分布 */}
+        <div className='mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2'>
+          <Card>
+            <CardHeader>
+              <CardTitle>浏览器分布</CardTitle>
+              <CardDescription>按独立访客统计</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarList
+                items={visitors.browsers.map((b) => ({
+                  name: b.name,
+                  value: b.count,
+                }))}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>操作系统分布</CardTitle>
+              <CardDescription>按独立访客统计</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarList
+                items={visitors.oses.map((o) => ({
+                  name: o.name,
+                  value: o.count,
+                }))}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* TOP 访客 */}
+        <Card className='mt-4'>
+          <CardHeader>
+            <CardTitle>活跃访客 TOP 20</CardTitle>
+            <CardDescription>
+              最近 {visitors.days} 天 · 按操作数排序
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TopVisitorsTable visitors={visitors.top_visitors} />
+          </CardContent>
+        </Card>
+
+        {/* 5. 物品热点 */}
+        <Card className='mt-4'>
+          <CardHeader>
+            <CardTitle>物品热点</CardTitle>
+            <CardDescription>
+              最近 {insights.days} 天 · 选中 / 放置 / 保留率 TOP 20
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ItemPopularity items={insights.item_popularity} />
+          </CardContent>
+        </Card>
+
+        {/* 6. 三列并排 */}
         <div className='mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3'>
           <Card>
             <CardHeader>

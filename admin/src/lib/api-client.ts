@@ -317,9 +317,75 @@ export const release = {
     api.get<ReleaseRollbackRecord[]>(`/admin/releases/rollbacks?limit=${limit}`),
 }
 
+export interface HeatmapCell {
+  weekday: number
+  hour: number
+  sessions: number
+}
+
+export interface ItemPopularityRow {
+  sku: string
+  display_name: string
+  select_count: number
+  place_count: number
+  remove_count: number
+}
+
+export interface FunnelData {
+  page_views: number
+  item_selects: number
+  item_places: number
+  exports: number
+}
+
+export interface AnalyticsInsightsResponse {
+  days: number
+  hourly_heatmap: HeatmapCell[]
+  item_popularity: ItemPopularityRow[]
+  funnel: FunnelData
+}
+
+export interface NewVsReturning {
+  new_visitors: number
+  returning_visitors: number
+}
+
+export interface EngagementTier {
+  tier: string
+  count: number
+}
+
+export interface TopVisitor {
+  visitor_id: string
+  sessions: number
+  events: number
+  actions: number
+  exports: number
+  imports: number
+  presets: number
+  device_type: string
+  city: string
+  avg_duration_ms: number
+  last_active_at: string
+}
+
+export interface AnalyticsVisitorsResponse {
+  days: number
+  new_vs_returning: NewVsReturning
+  engagement: EngagementTier[]
+  top_visitors: TopVisitor[]
+  avg_session: { visible_ms: number; total_ms: number }
+  browsers: { name: string; count: number }[]
+  oses: { name: string; count: number }[]
+}
+
 export const analytics = {
   overview: (days = 30) =>
     api.get<AnalyticsOverviewResponse>(`/admin/analytics/overview?days=${days}`),
+  insights: (days = 30) =>
+    api.get<AnalyticsInsightsResponse>(`/admin/analytics/insights?days=${days}`),
+  visitors: (days = 30) =>
+    api.get<AnalyticsVisitorsResponse>(`/admin/analytics/visitors?days=${days}`),
   listEvents: (params: { page?: number; limit?: number; event_name?: string; device_type?: string } = {}) => {
     const q = new URLSearchParams()
     if (params.page) q.set('page', String(params.page))

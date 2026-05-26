@@ -44,23 +44,23 @@ export function AnalyticsChart({ trend }: { trend: AnalyticsTrendPoint[] }) {
         <Area
           type='monotone'
           dataKey='事件'
-          stroke='#3b82f6'
-          fill='#3b82f6'
-          fillOpacity={0.15}
+          stroke='#94a3b8'
+          fill='#94a3b8'
+          fillOpacity={0.12}
         />
         <Area
           type='monotone'
           dataKey='访客'
-          stroke='#10b981'
-          fill='#10b981'
-          fillOpacity={0.1}
+          stroke='#64748b'
+          fill='#64748b'
+          fillOpacity={0.08}
         />
         <Area
           type='monotone'
           dataKey='会话'
-          stroke='#f59e0b'
-          fill='#f59e0b'
-          fillOpacity={0.08}
+          stroke='#cbd5e1'
+          fill='#cbd5e1'
+          fillOpacity={0.1}
         />
       </AreaChart>
     </ResponsiveContainer>

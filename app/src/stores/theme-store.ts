@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { STORAGE_KEYS } from "@/config/brand"
+import { trackEvent } from "@/lib/analytics"
 
 type ThemeMode = "light" | "dark" | "system"
 
@@ -36,6 +37,7 @@ export const useThemeStore = create<ThemeState>()((set) => ({
   setMode: (mode) => {
     localStorage.setItem(STORAGE_KEY, mode)
     applyTheme(mode)
+    trackEvent("theme_change", { mode })
     set({ mode })
   },
 }))

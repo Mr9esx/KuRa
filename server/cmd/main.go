@@ -124,6 +124,8 @@ func main() {
 	admin.GET("/releases/:release_id", releaseHandler.Get)
 	admin.GET("/stats", statsHandler.Overview)
 	admin.GET("/analytics/overview", analyticsHandler.Overview)
+	admin.GET("/analytics/insights", analyticsHandler.Insights)
+	admin.GET("/analytics/visitors", analyticsHandler.Visitors)
 	admin.GET("/analytics/events", analyticsHandler.ListEvents)
 
 	// Serve uploaded files for admin preview

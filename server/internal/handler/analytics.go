@@ -371,6 +371,281 @@ func (h *AnalyticsHandler) ListEvents(c echo.Context) error {
 	})
 }
 
+func (h *AnalyticsHandler) Insights(c echo.Context) error {
+	days := 30
+	if raw := c.QueryParam("days"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			if parsed < 1 {
+				parsed = 1
+			}
+			if parsed > 180 {
+				parsed = 180
+			}
+			days = parsed
+		}
+	}
+
+	fromExpr := fmt.Sprintf("-%d days", days-1)
+
+	// 1. Hourly heatmap: weekday × hour → session count
+	type heatmapCell struct {
+		Weekday  int   `json:"weekday"`
+		Hour     int   `json:"hour"`
+		Sessions int64 `json:"sessions"`
+	}
+	var heatmap []heatmapCell
+	if err := h.DB.
+		Table("analytics_events").
+		Select("CAST(strftime('%w', occurred_at) AS INTEGER) AS weekday, CAST(strftime('%H', occurred_at) AS INTEGER) AS hour, COUNT(DISTINCT session_id) AS sessions").
+		Where("occurred_at >= datetime('now', ?)", fromExpr).
+		Group("weekday, hour").
+		Order("weekday, hour").
+		Scan(&heatmap).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if heatmap == nil {
+		heatmap = []heatmapCell{}
+	}
+
+	// 2. Item popularity: top items by select/place/remove counts, joined with product name
+	type itemRow struct {
+		SKU         string `json:"sku"`
+		DisplayName string `json:"display_name"`
+		SelectCount int64  `json:"select_count"`
+		PlaceCount  int64  `json:"place_count"`
+		RemoveCount int64  `json:"remove_count"`
+	}
+	var items []itemRow
+	if err := h.DB.Raw(`
+		SELECT
+			a.sku,
+			COALESCE(p.display_name, a.sku) AS display_name,
+			a.select_count,
+			a.place_count,
+			a.remove_count
+		FROM (
+			SELECT
+				json_extract(properties, '$.sku') AS sku,
+				SUM(CASE WHEN event_name IN ('catalog_item_select', 'placement_select') THEN 1 ELSE 0 END) AS select_count,
+				SUM(CASE WHEN event_name = 'item_place' THEN 1 ELSE 0 END) AS place_count,
+				SUM(CASE WHEN event_name = 'item_remove' THEN 1 ELSE 0 END) AS remove_count
+			FROM analytics_events
+			WHERE event_name IN ('catalog_item_select', 'placement_select', 'item_place', 'item_remove')
+			  AND occurred_at >= datetime('now', ?)
+			  AND json_extract(properties, '$.sku') IS NOT NULL
+			GROUP BY sku
+		) a
+		LEFT JOIN products p ON p.sku = a.sku
+		ORDER BY a.place_count DESC
+		LIMIT 20
+	`, fromExpr).Scan(&items).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if items == nil {
+		items = []itemRow{}
+	}
+
+	// 3. Funnel: unique sessions reaching each stage
+	type funnelRow struct {
+		PageViews   int64 `json:"page_views"`
+		ItemSelects int64 `json:"item_selects"`
+		ItemPlaces  int64 `json:"item_places"`
+		Exports     int64 `json:"exports"`
+	}
+	var funnel funnelRow
+	if err := h.DB.
+		Table("analytics_events").
+		Select(`
+			COUNT(DISTINCT CASE WHEN event_name = 'page_view' THEN session_id END) AS page_views,
+			COUNT(DISTINCT CASE WHEN event_name IN ('catalog_item_select', 'placement_select') THEN session_id END) AS item_selects,
+			COUNT(DISTINCT CASE WHEN event_name = 'item_place' THEN session_id END) AS item_places,
+			COUNT(DISTINCT CASE WHEN event_name = 'layout_export' THEN session_id END) AS exports
+		`).
+		Where("occurred_at >= datetime('now', ?)", fromExpr).
+		Scan(&funnel).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"days":            days,
+		"hourly_heatmap":  heatmap,
+		"item_popularity": items,
+		"funnel":          funnel,
+	})
+}
+
+func (h *AnalyticsHandler) Visitors(c echo.Context) error {
+	days := 30
+	if raw := c.QueryParam("days"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			if parsed < 1 {
+				parsed = 1
+			}
+			if parsed > 180 {
+				parsed = 180
+			}
+			days = parsed
+		}
+	}
+
+	fromExpr := fmt.Sprintf("-%d days", days-1)
+
+	// 1. New vs returning visitors
+	type newReturnRow struct {
+		NewVisitors       int64 `json:"new_visitors"`
+		ReturningVisitors int64 `json:"returning_visitors"`
+	}
+	var newReturn newReturnRow
+	h.DB.Raw(`
+		WITH visitor_sessions AS (
+			SELECT visitor_id, COUNT(DISTINCT session_id) AS sess_count
+			FROM analytics_events
+			WHERE occurred_at >= datetime('now', ?)
+			GROUP BY visitor_id
+		)
+		SELECT
+			SUM(CASE WHEN sess_count = 1 THEN 1 ELSE 0 END) AS new_visitors,
+			SUM(CASE WHEN sess_count > 1 THEN 1 ELSE 0 END) AS returning_visitors
+		FROM visitor_sessions
+	`, fromExpr).Scan(&newReturn)
+
+	// 2. Engagement tiers: by action count per visitor
+	type engagementTier struct {
+		Tier    string `json:"tier"`
+		Count   int64  `json:"count"`
+	}
+	var engagement []engagementTier
+	h.DB.Raw(`
+		WITH visitor_actions AS (
+			SELECT visitor_id, COUNT(*) AS action_count
+			FROM analytics_events
+			WHERE occurred_at >= datetime('now', ?)
+			  AND event_name NOT IN ('page_view', 'session_start', 'session_end')
+			GROUP BY visitor_id
+		)
+		SELECT tier, COUNT(*) AS count FROM (
+			SELECT CASE
+				WHEN action_count = 0 THEN '仅浏览'
+				WHEN action_count BETWEEN 1 AND 5 THEN '轻度互动'
+				WHEN action_count BETWEEN 6 AND 20 THEN '中度互动'
+				ELSE '深度互动'
+			END AS tier
+			FROM visitor_actions
+		) GROUP BY tier
+	`, fromExpr).Scan(&engagement)
+	if engagement == nil {
+		engagement = []engagementTier{}
+	}
+
+	// 3. Top visitors by action count with behavior summary
+	type topVisitor struct {
+		VisitorID    string  `json:"visitor_id"`
+		Sessions     int64   `json:"sessions"`
+		Events       int64   `json:"events"`
+		Actions      int64   `json:"actions"`
+		Exports      int64   `json:"exports"`
+		Imports      int64   `json:"imports"`
+		Presets      int64   `json:"presets"`
+		DeviceType   string  `json:"device_type"`
+		City         string  `json:"city"`
+		AvgDuration  float64 `json:"avg_duration_ms"`
+		LastActiveAt string  `json:"last_active_at"`
+	}
+	var topVisitors []topVisitor
+	h.DB.Raw(`
+		SELECT
+			visitor_id,
+			COUNT(DISTINCT session_id) AS sessions,
+			COUNT(*) AS events,
+			SUM(CASE WHEN event_name NOT IN ('page_view', 'session_start', 'session_end') THEN 1 ELSE 0 END) AS actions,
+			SUM(CASE WHEN event_name = 'layout_export' THEN 1 ELSE 0 END) AS exports,
+			SUM(CASE WHEN event_name = 'layout_import' THEN 1 ELSE 0 END) AS imports,
+			SUM(CASE WHEN event_name = 'preset_apply' THEN 1 ELSE 0 END) AS presets,
+			MAX(device_type) AS device_type,
+			MAX(city) AS city,
+			MAX(occurred_at) AS last_active_at
+		FROM analytics_events
+		WHERE occurred_at >= datetime('now', ?)
+		GROUP BY visitor_id
+		ORDER BY actions DESC
+		LIMIT 20
+	`, fromExpr).Scan(&topVisitors)
+	if topVisitors == nil {
+		topVisitors = []topVisitor{}
+	}
+
+	for i := range topVisitors {
+		var avgDur struct {
+			Avg float64
+		}
+		h.DB.Raw(`
+			SELECT AVG(CAST(json_extract(properties, '$.duration_ms') AS REAL)) AS avg
+			FROM analytics_events
+			WHERE visitor_id = ? AND event_name = 'session_end'
+			  AND occurred_at >= datetime('now', ?)
+		`, topVisitors[i].VisitorID, fromExpr).Scan(&avgDur)
+		topVisitors[i].AvgDuration = avgDur.Avg
+	}
+
+	// 4. Overall average session duration
+	var avgSession struct {
+		AvgDuration float64 `json:"avg_duration"`
+		AvgTotal    float64 `json:"avg_total"`
+	}
+	h.DB.Raw(`
+		SELECT
+			AVG(CAST(json_extract(properties, '$.duration_ms') AS REAL)) AS avg_duration,
+			AVG(CAST(json_extract(properties, '$.total_duration_ms') AS REAL)) AS avg_total
+		FROM analytics_events
+		WHERE event_name = 'session_end'
+		  AND occurred_at >= datetime('now', ?)
+	`, fromExpr).Scan(&avgSession)
+
+	// 5. Browser & OS distribution
+	type distRow struct {
+		Name  string `json:"name"`
+		Count int64  `json:"count"`
+	}
+	var browsers []distRow
+	h.DB.Table("analytics_events").
+		Select("browser AS name, COUNT(DISTINCT visitor_id) AS count").
+		Where("occurred_at >= datetime('now', ?)", fromExpr).
+		Where("browser <> ''").
+		Group("browser").
+		Order("count DESC").
+		Limit(10).
+		Scan(&browsers)
+	if browsers == nil {
+		browsers = []distRow{}
+	}
+
+	var oses []distRow
+	h.DB.Table("analytics_events").
+		Select("os AS name, COUNT(DISTINCT visitor_id) AS count").
+		Where("occurred_at >= datetime('now', ?)", fromExpr).
+		Where("os <> ''").
+		Group("os").
+		Order("count DESC").
+		Limit(10).
+		Scan(&oses)
+	if oses == nil {
+		oses = []distRow{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"days": days,
+		"new_vs_returning": newReturn,
+		"engagement":       engagement,
+		"top_visitors":     topVisitors,
+		"avg_session": map[string]interface{}{
+			"visible_ms": avgSession.AvgDuration,
+			"total_ms":   avgSession.AvgTotal,
+		},
+		"browsers": browsers,
+		"oses":     oses,
+	})
+}
+
 func extractClientIP(c echo.Context) string {
 	if forwardedFor := strings.TrimSpace(c.Request().Header.Get("X-Forwarded-For")); forwardedFor != "" {
 		parts := strings.Split(forwardedFor, ",")

@@ -163,6 +163,10 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.selectedPlacementId = id
         if (id) {
           state.selectedCatalogSku = null
+          const placement = state.placements.find((p) => p.id === id)
+          if (placement) {
+            trackEvent("placement_select", { sku: placement.sku })
+          }
         }
       }),
 
@@ -269,16 +273,25 @@ export const useEditorStore = create<EditorState & EditorActions>()(
 
     setMaterialColor: (id) =>
       set((state) => {
+        if (state.materialColorId !== id) {
+          trackEvent("color_change", { target: "material", color_id: id })
+        }
         state.materialColorId = id
       }),
 
     setBlockColor: (id) =>
       set((state) => {
+        if (state.blockColorId !== id) {
+          trackEvent("color_change", { target: "block", color_id: id })
+        }
         state.blockColorId = id
       }),
 
     setItemColor: (id) =>
       set((state) => {
+        if (state.itemColorId !== id) {
+          trackEvent("color_change", { target: "item", color_id: id })
+        }
         state.itemColorId = id
       }),
 
@@ -303,11 +316,17 @@ export const useEditorStore = create<EditorState & EditorActions>()(
           }
         })
       })
+      const skuCounts: Record<string, number> = {}
+      for (const p of preset.items) {
+        skuCounts[p.sku] = (skuCounts[p.sku] ?? 0) + 1
+      }
       trackEvent("preset_apply", {
         preset_id: preset.id,
         preset_name: preset.name,
         block_sku: preset.blockSku,
         items_count: preset.items.length,
+        unique_skus: Object.keys(skuCounts).length,
+        item_skus: skuCounts,
       })
     },
 
@@ -351,9 +370,15 @@ export const useEditorStore = create<EditorState & EditorActions>()(
         state.placements = nextPlacements
       })
 
+      const skuCounts: Record<string, number> = {}
+      for (const p of nextPlacements) {
+        skuCounts[p.sku] = (skuCounts[p.sku] ?? 0) + 1
+      }
       trackEvent("layout_import", {
         block_sku: layout.blockSku,
-        applied_count: nextPlacements.length,
+        total_items: nextPlacements.length,
+        unique_skus: Object.keys(skuCounts).length,
+        item_skus: skuCounts,
         skipped_count: skipped,
       })
 

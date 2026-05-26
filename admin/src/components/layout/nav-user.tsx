@@ -3,6 +3,7 @@ import {
   ChevronsUpDown,
   LogOut,
   Palette,
+  PanelLeftClose,
   ShieldCheck,
 } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
@@ -26,7 +27,7 @@ import {
 import { SignOutDialog } from '@/components/sign-out-dialog'
 
 export function NavUser() {
-  const { isMobile } = useSidebar()
+  const { isMobile, toggleSidebar } = useSidebar()
   const [open, setOpen] = useDialogState()
   const { auth } = useAuthStore()
   const username = auth.user?.username ?? 'Admin'
@@ -91,6 +92,12 @@ export function NavUser() {
                     外观设置
                   </Link>
                 </DropdownMenuItem>
+                {!isMobile && (
+                  <DropdownMenuItem onClick={toggleSidebar}>
+                    <PanelLeftClose />
+                    折叠侧栏
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem

@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -251,7 +252,7 @@ export function PresetFormSheet({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className='sm:max-w-3xl max-h-[90vh] overflow-y-auto'
+        className='sm:max-w-3xl max-h-[90vh]'
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
@@ -261,7 +262,8 @@ export function PresetFormSheet({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='grid gap-4 py-4'>
+        <DialogBody>
+        <div className='grid gap-4'>
           {/* Image preview + upload */}
           <div className='space-y-3'>
             <Label>方案封面图</Label>
@@ -634,6 +636,7 @@ export function PresetFormSheet({
             )}
           </div>
         </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)}>

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -155,7 +156,7 @@ export function ProductFormSheet({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className='sm:max-w-2xl max-h-[85vh] overflow-y-auto'>
+        <DialogContent className='sm:max-w-2xl'>
           <DialogHeader>
             <DialogTitle>{isEdit ? '编辑产品' : '新增产品'}</DialogTitle>
             <DialogDescription>
@@ -163,7 +164,8 @@ export function ProductFormSheet({
             </DialogDescription>
           </DialogHeader>
 
-          <div className='grid gap-4 py-4'>
+          <DialogBody>
+          <div className='grid gap-4'>
             {/* Image preview + actions */}
             <div className='space-y-3'>
               <Label>产品图片</Label>
@@ -367,6 +369,7 @@ export function ProductFormSheet({
               )}
             </div>
           </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button variant='outline' onClick={() => onOpenChange(false)}>

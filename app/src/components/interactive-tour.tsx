@@ -6,6 +6,7 @@ import { useLayoutMode } from "@/hooks/use-layout-mode"
 import { useCatalog } from "@/hooks/use-catalog"
 import { AppLogo } from "@/components/brand/app-logo"
 import { STORAGE_KEYS, CUSTOM_EVENTS, APP_PAGE_TITLE } from "@/config/brand"
+import { trackEvent } from "@/lib/analytics"
 
 const STORAGE_KEY = STORAGE_KEYS.tourCompleted
 
@@ -423,29 +424,33 @@ export function InteractiveTour() {
   const complete = useCallback(() => {
     setPhase("done")
     localStorage.setItem(STORAGE_KEY, "true")
+    trackEvent("tour_complete", { steps_completed: steps.length })
     toast.success("引导完成，开始你的创作吧！")
-  }, [])
+  }, [steps.length])
 
   const skip = useCallback(() => {
     setPhase("done")
     localStorage.setItem(STORAGE_KEY, "true")
-  }, [])
+    trackEvent("tour_skip", { skipped_at_step: stepIndex, step_id: steps[stepIndex]?.id })
+  }, [stepIndex, steps])
 
   const advanceStep = useCallback(() => {
+    trackEvent("tour_step", { step_index: stepIndex, step_id: steps[stepIndex]?.id })
     const next = stepIndex + 1
     if (next >= steps.length) {
       complete()
       return
     }
     setStepIndex(next)
-  }, [complete, stepIndex, steps.length])
+  }, [complete, stepIndex, steps])
 
   const startTour = useCallback(() => {
     useEditorStore.getState().clearAll()
     useEditorStore.getState().selectCatalogItem(null)
     setStepIndex(0)
     setPhase("active")
-  }, [])
+    trackEvent("tour_start", { total_steps: steps.length })
+  }, [steps.length])
 
   useEffect(() => {
     if (phase !== "active" || !currentStep) return

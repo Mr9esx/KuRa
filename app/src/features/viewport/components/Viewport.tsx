@@ -27,6 +27,7 @@ import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
 import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, AlertTriangle, Info } from "lucide-react"
 import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
+import { trackEvent } from "@/lib/analytics"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
@@ -173,7 +174,23 @@ function createShoppingWorkbook(
   return wb
 }
 
+function trackExport(exportType: string, block: BlockCatalogItem, placements: Placement[]) {
+  const skuCounts: Record<string, number> = {}
+  for (const p of placements) {
+    skuCounts[p.sku] = (skuCounts[p.sku] ?? 0) + 1
+  }
+  trackEvent("layout_export", {
+    export_type: exportType,
+    block_sku: block.sku,
+    block_name: block.display_name,
+    total_items: placements.length,
+    unique_skus: Object.keys(skuCounts).length,
+    item_skus: skuCounts,
+  })
+}
+
 async function exportModel(block: BlockCatalogItem, placements: Placement[]) {
+  trackExport("model", block, placements)
   const { JSZip, saveAs } = await loadExportDeps()
   const zip = new JSZip()
   const modelPayload = createModelPayload(block, placements)
@@ -184,6 +201,7 @@ async function exportModel(block: BlockCatalogItem, placements: Placement[]) {
 }
 
 async function exportShoppingXlsx(block: BlockCatalogItem, placements: Placement[]) {
+  trackExport("shopping", block, placements)
   const { XLSX, saveAs } = await loadExportDeps()
   const wb = createShoppingWorkbook(block, placements, XLSX)
   const xlsxBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" })
@@ -194,6 +212,7 @@ async function exportShoppingXlsx(block: BlockCatalogItem, placements: Placement
 }
 
 async function exportAll(block: BlockCatalogItem, placements: Placement[]) {
+  trackExport("all", block, placements)
   const { JSZip, saveAs, XLSX } = await loadExportDeps()
   const zip = new JSZip()
   const modelPayload = createModelPayload(block, placements)
