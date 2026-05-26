@@ -27,7 +27,7 @@ export function GeoHotspotMap({ hotspots }: { hotspots: AnalyticsGeoHotspot[] })
     <div className='space-y-3'>
       <div className='h-[300px] w-full overflow-hidden rounded-lg border border-border bg-muted/20'>
         <svg viewBox='0 0 1000 500' className='h-full w-full'>
-          <rect x='0' y='0' width='1000' height='500' fill='hsl(var(--muted))' />
+          <rect x='0' y='0' width='1000' height='500' fill='var(--muted)' />
           {Array.from({ length: 11 }).map((_, i) => {
             const x = i * 100
             return (
@@ -37,7 +37,7 @@ export function GeoHotspotMap({ hotspots }: { hotspots: AnalyticsGeoHotspot[] })
                 y1={0}
                 x2={x}
                 y2={500}
-                stroke='hsl(var(--border))'
+                stroke='var(--border)'
                 strokeWidth='1'
                 opacity='0.45'
               />
@@ -52,7 +52,7 @@ export function GeoHotspotMap({ hotspots }: { hotspots: AnalyticsGeoHotspot[] })
                 y1={y}
                 x2={1000}
                 y2={y}
-                stroke='hsl(var(--border))'
+                stroke='var(--border)'
                 strokeWidth='1'
                 opacity='0.45'
               />
@@ -67,9 +67,9 @@ export function GeoHotspotMap({ hotspots }: { hotspots: AnalyticsGeoHotspot[] })
                 cx={x}
                 cy={y}
                 r={getMarkerSize(item.count, maxCount)}
-                fill='hsl(var(--primary))'
+                fill='var(--primary)'
                 fillOpacity='0.6'
-                stroke='hsl(var(--primary))'
+                stroke='var(--primary)'
                 strokeWidth='1.2'
               />
             )
