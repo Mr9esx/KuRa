@@ -27,6 +27,11 @@ type SetupRequest struct {
 	Password string `json:"password"`
 }
 
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 type LoginResponse struct {
 	Token string `json:"token"`
 	User  struct {
@@ -129,4 +134,34 @@ func (h *AuthHandler) Setup(c echo.Context) error {
 			"username": user.Username,
 		},
 	})
+}
+
+func (h *AuthHandler) ChangePassword(c echo.Context) error {
+	userID := c.Get("user_id").(uint)
+
+	var req ChangePasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+
+	if len(req.NewPassword) < 6 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "新密码至少6个字符"})
+	}
+
+	var user model.User
+	if err := h.DB.First(&user, userID).Error; err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "user not found"})
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "当前密码不正确"})
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
+	}
+
+	h.DB.Model(&user).Update("password_hash", string(hash))
+	return c.JSON(http.StatusOK, map[string]interface{}{"success": true})
 }

@@ -59,6 +59,58 @@ export const auth = {
       '/auth/setup',
       { username, password }
     ),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put<{ success: boolean }>('/admin/me/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+}
+
+export interface StatsOverview {
+  products: {
+    total: number
+    blocks: number
+    items: number
+    risers: number
+    published: number
+    unpublished: number
+  }
+  categories: {
+    total: number
+    block_categories: number
+    item_categories: number
+  }
+  presets: {
+    total: number
+    published: number
+    unpublished: number
+  }
+}
+
+export interface AnalyticsEventItem {
+  id: number
+  event_name: string
+  page_path: string
+  page_url: string
+  device_type: string
+  os: string
+  browser: string
+  ip: string
+  country: string
+  region: string
+  city: string
+  occurred_at: string
+}
+
+export interface AnalyticsEventsResponse {
+  events: AnalyticsEventItem[]
+  total: number
+  page: number
+  limit: number
+}
+
+export const stats = {
+  overview: () => api.get<StatsOverview>('/admin/stats'),
 }
 
 export interface Product {
@@ -268,4 +320,12 @@ export const release = {
 export const analytics = {
   overview: (days = 30) =>
     api.get<AnalyticsOverviewResponse>(`/admin/analytics/overview?days=${days}`),
+  listEvents: (params: { page?: number; limit?: number; event_name?: string; device_type?: string } = {}) => {
+    const q = new URLSearchParams()
+    if (params.page) q.set('page', String(params.page))
+    if (params.limit) q.set('limit', String(params.limit))
+    if (params.event_name) q.set('event_name', params.event_name)
+    if (params.device_type) q.set('device_type', params.device_type)
+    return api.get<AnalyticsEventsResponse>(`/admin/analytics/events?${q.toString()}`)
+  },
 }

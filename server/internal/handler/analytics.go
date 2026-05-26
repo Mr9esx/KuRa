@@ -312,6 +312,65 @@ func (h *AnalyticsHandler) Overview(c echo.Context) error {
 	})
 }
 
+func (h *AnalyticsHandler) ListEvents(c echo.Context) error {
+	page := 1
+	limit := 20
+	if raw := c.QueryParam("page"); raw != "" {
+		if p, err := strconv.Atoi(raw); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if raw := c.QueryParam("limit"); raw != "" {
+		if l, err := strconv.Atoi(raw); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	query := h.DB.Table("analytics_events")
+	if eventName := strings.TrimSpace(c.QueryParam("event_name")); eventName != "" {
+		query = query.Where("event_name = ?", eventName)
+	}
+	if deviceType := strings.TrimSpace(c.QueryParam("device_type")); deviceType != "" {
+		query = query.Where("device_type = ?", deviceType)
+	}
+
+	var total int64
+	query.Count(&total)
+
+	type eventRow struct {
+		ID         uint      `json:"id"`
+		EventName  string    `json:"event_name"`
+		PagePath   string    `json:"page_path"`
+		PageURL    string    `json:"page_url"`
+		DeviceType string    `json:"device_type"`
+		OS         string    `json:"os"`
+		Browser    string    `json:"browser"`
+		IP         string    `json:"ip"`
+		Country    string    `json:"country"`
+		Region     string    `json:"region"`
+		City       string    `json:"city"`
+		OccurredAt time.Time `json:"occurred_at"`
+	}
+	var events []eventRow
+	query.
+		Select("id, event_name, page_path, page_url, device_type, os, browser, ip, country, region, city, occurred_at").
+		Order("occurred_at desc").
+		Offset((page - 1) * limit).
+		Limit(limit).
+		Scan(&events)
+
+	if events == nil {
+		events = []eventRow{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"events": events,
+		"total":  total,
+		"page":   page,
+		"limit":  limit,
+	})
+}
+
 func extractClientIP(c echo.Context) string {
 	if forwardedFor := strings.TrimSpace(c.Request().Header.Get("X-Forwarded-For")); forwardedFor != "" {
 		parts := strings.Split(forwardedFor, ",")

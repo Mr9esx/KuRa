@@ -5,16 +5,12 @@ import {
   Upload,
   LayoutDashboard,
   Settings,
+  ScrollText,
   Command,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
 
 export const sidebarData: SidebarData = {
-  user: {
-    name: 'Admin',
-    email: 'admin@risu.app',
-    avatar: '',
-  },
   teams: [
     {
       name: 'RiSu Admin',
@@ -56,6 +52,11 @@ export const sidebarData: SidebarData = {
     {
       title: '系统',
       items: [
+        {
+          title: '事件日志',
+          url: '/events',
+          icon: ScrollText,
+        },
         {
           title: '设置',
           url: '/settings',

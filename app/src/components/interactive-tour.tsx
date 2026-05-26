@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 import { toast } from "sonner"
 import { useEditorStore } from "@/stores/editor-store"
 import { useLayoutMode } from "@/hooks/use-layout-mode"

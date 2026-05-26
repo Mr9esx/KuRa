@@ -52,6 +52,7 @@ func main() {
 	}
 	releaseHandler := &handler.ReleaseHandler{Service: releaseSvc}
 	analyticsHandler := &handler.AnalyticsHandler{DB: db, Resolver: geo.NewResolver(cfg.Storage.GeoIPDB)}
+	statsHandler := &handler.StatsHandler{DB: db}
 
 	e := echo.New()
 	e.Use(echoMiddleware.Logger())
@@ -89,6 +90,7 @@ func main() {
 	// Admin API (requires authentication)
 	admin := e.Group("/api/v1/admin", middleware.AuthRequired(cfg.Server.JWTSecret))
 	admin.GET("/me", authHandler.Me)
+	admin.PUT("/me/password", authHandler.ChangePassword)
 
 	admin.GET("/products", productHandler.List)
 	admin.POST("/products", productHandler.Create)
@@ -120,7 +122,9 @@ func main() {
 	admin.POST("/releases", releaseHandler.Upsert)
 	admin.POST("/releases/rollbacks", releaseHandler.RecordRollback)
 	admin.GET("/releases/:release_id", releaseHandler.Get)
+	admin.GET("/stats", statsHandler.Overview)
 	admin.GET("/analytics/overview", analyticsHandler.Overview)
+	admin.GET("/analytics/events", analyticsHandler.ListEvents)
 
 	// Serve uploaded files for admin preview
 	e.Static("/files", cfg.Storage.DataDir)
