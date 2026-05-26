@@ -572,6 +572,13 @@ async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
+function parseEmbedParams() {
+  const params = new URLSearchParams(window.location.search)
+  const embed = params.get("embed") === "1"
+  const model = params.get("model") || ""
+  return { embed, model }
+}
+
 export default function ItemCardTool() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<SceneContext | null>(null)
@@ -592,7 +599,20 @@ export default function ItemCardTool() {
     startPovY: 0,
   })
 
-  const [entries, setEntries] = useState<ModelEntry[]>(makeDefaultEntries)
+  const embedParams = useMemo(parseEmbedParams, [])
+
+  const makeInitialEntries = useCallback((): ModelEntry[] => {
+    if (embedParams.embed && embedParams.model) {
+      return [{
+        id: "embed-0",
+        source: embedParams.model,
+        displayName: embedParams.model.split("/").pop()?.replace(/\.3mf$/i, "") ?? "model",
+      }]
+    }
+    return makeDefaultEntries()
+  }, [embedParams])
+
+  const [entries, setEntries] = useState<ModelEntry[]>(makeInitialEntries)
   const [activeId, setActiveId] = useState(entries[0]?.id ?? "")
   const [status, setStatus] = useState("就绪")
   const [busy, setBusy] = useState(false)
@@ -784,6 +804,31 @@ export default function ItemCardTool() {
       setBusy(false)
     }
   }, [activeEntry, buildExportMetadata, exportHeight, exportWidth, renderOne, withExportSize])
+
+  const handleEmbedConfirm = useCallback(async () => {
+    if (!canvasRef.current || !activeEntry) return
+    setBusy(true)
+    try {
+      const blob = await withExportSize(async () => {
+        await renderOne(activeEntry)
+        return canvasToBlob(canvasRef.current!)
+      })
+      if (!blob) throw new Error("PNG 生成失败")
+      const buffer = await blob.arrayBuffer()
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((s, b) => s + String.fromCharCode(b), ""),
+      )
+      window.parent.postMessage(
+        { type: "item-card-result", base64, width: exportWidth, height: exportHeight },
+        "*",
+      )
+      setStatus("已发送渲染结果")
+    } catch (e) {
+      setStatus(`渲染失败：${String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [activeEntry, exportHeight, exportWidth, renderOne, withExportSize])
 
   const handleDownloadZip = useCallback(async () => {
     if (!canvasRef.current || entries.length === 0) return
@@ -986,76 +1031,80 @@ export default function ItemCardTool() {
             视角固定为左前斜上（适合卡片图），PNG 透明背景。
           </p>
 
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-xs text-white/80">模型列表</span>
-            <button
-              type="button"
-              onClick={handleOpenFolder}
-              className="rounded-md border border-white/25 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
-            >
-              打开文件夹
-            </button>
-            <button
-              type="button"
-              onClick={handleAddFiles}
-              className="rounded-md border border-white/25 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
-            >
-              添加文件
-            </button>
-          </div>
-
-          <div className="mt-2 max-h-[240px] overflow-y-auto rounded-md border border-white/15 bg-black/30">
-            {entries.length === 0 ? (
-              <p className="p-3 text-center text-xs text-white/40">暂无模型，请打开文件夹或添加文件</p>
-            ) : (
-              entries.map((entry) => (
-                <div
-                  key={entry.id}
-                  onClick={() => setActiveId(entry.id)}
-                  className={`flex cursor-pointer items-center gap-2 border-b border-white/8 px-2 py-1.5 last:border-b-0 ${
-                    activeId === entry.id ? "bg-white/10" : "hover:bg-white/5"
-                  }`}
+          {!embedParams.embed && (
+            <>
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-xs text-white/80">模型列表</span>
+                <button
+                  type="button"
+                  onClick={handleOpenFolder}
+                  className="rounded-md border border-white/25 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
                 >
-                  <span className="shrink-0 text-[10px] text-white/30">
-                    {activeId === entry.id ? "●" : "○"}
-                  </span>
-                  <input
-                    type="text"
-                    value={entry.displayName}
-                    onChange={(e) => handleRenameEntry(entry.id, e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="min-w-0 flex-1 bg-transparent text-xs outline-none focus:underline focus:decoration-white/40"
-                    title={sourceLabel(entry)}
-                  />
-                  <button
-                    type="button"
-                    className="shrink-0 text-[10px] text-white/30 hover:text-blue-400"
-                    onClick={(e) => { e.stopPropagation(); handleSaveRenamed(entry) }}
-                    title="下载重命名文件"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="shrink-0 text-[10px] text-white/30 hover:text-red-400"
-                    onClick={(e) => { e.stopPropagation(); handleRemoveEntry(entry.id) }}
-                    title="移除"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-          {entries.length > 0 && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleSaveAllRenamed}
-              className="mt-2 w-full rounded-md border border-white/25 px-3 py-1.5 text-xs transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              批量下载重命名模型（ZIP）
-            </button>
+                  打开文件夹
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddFiles}
+                  className="rounded-md border border-white/25 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
+                >
+                  添加文件
+                </button>
+              </div>
+
+              <div className="mt-2 max-h-[240px] overflow-y-auto rounded-md border border-white/15 bg-black/30">
+                {entries.length === 0 ? (
+                  <p className="p-3 text-center text-xs text-white/40">暂无模型，请打开文件夹或添加文件</p>
+                ) : (
+                  entries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      onClick={() => setActiveId(entry.id)}
+                      className={`flex cursor-pointer items-center gap-2 border-b border-white/8 px-2 py-1.5 last:border-b-0 ${
+                        activeId === entry.id ? "bg-white/10" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <span className="shrink-0 text-[10px] text-white/30">
+                        {activeId === entry.id ? "●" : "○"}
+                      </span>
+                      <input
+                        type="text"
+                        value={entry.displayName}
+                        onChange={(e) => handleRenameEntry(entry.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="min-w-0 flex-1 bg-transparent text-xs outline-none focus:underline focus:decoration-white/40"
+                        title={sourceLabel(entry)}
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 text-[10px] text-white/30 hover:text-blue-400"
+                        onClick={(e) => { e.stopPropagation(); handleSaveRenamed(entry) }}
+                        title="下载重命名文件"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="shrink-0 text-[10px] text-white/30 hover:text-red-400"
+                        onClick={(e) => { e.stopPropagation(); handleRemoveEntry(entry.id) }}
+                        title="移除"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              {entries.length > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={handleSaveAllRenamed}
+                  className="mt-2 w-full rounded-md border border-white/25 px-3 py-1.5 text-xs transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  批量下载重命名模型（ZIP）
+                </button>
+              )}
+            </>
           )}
 
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1356,22 +1405,35 @@ export default function ItemCardTool() {
           />
 
           <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={busy || !activeEntry}
-              onClick={handleDownloadCurrent}
-              className="rounded-md bg-white px-3 py-2 text-xs font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              导出当前 PNG
-            </button>
-            <button
-              type="button"
-              disabled={busy || entries.length === 0}
-              onClick={handleDownloadZip}
-              className="rounded-md border border-white/35 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              批量导出 ZIP
-            </button>
+            {embedParams.embed ? (
+              <button
+                type="button"
+                disabled={busy || !activeEntry}
+                onClick={handleEmbedConfirm}
+                className="flex-1 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busy ? "渲染中…" : "确认使用此图片"}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={busy || !activeEntry}
+                  onClick={handleDownloadCurrent}
+                  className="rounded-md bg-white px-3 py-2 text-xs font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  导出当前 PNG
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || entries.length === 0}
+                  onClick={handleDownloadZip}
+                  className="rounded-md border border-white/35 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  批量导出 ZIP
+                </button>
+              </>
+            )}
           </div>
 
           <p className="mt-3 text-xs text-white/70">{status}</p>
