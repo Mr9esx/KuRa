@@ -10,14 +10,11 @@ import (
 	"github.com/Mr9esx/RiSu/server/internal/geo"
 	"github.com/Mr9esx/RiSu/server/internal/handler"
 	"github.com/Mr9esx/RiSu/server/internal/middleware"
-	"github.com/Mr9esx/RiSu/server/internal/model"
 	"github.com/Mr9esx/RiSu/server/internal/publisher"
 	"github.com/Mr9esx/RiSu/server/internal/seeder"
 	"github.com/Mr9esx/RiSu/server/internal/service"
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -35,7 +32,6 @@ func main() {
 		log.Fatalf("Failed to open database: %v", err)
 	}
 
-	ensureAdminUser(db, cfg)
 	seeder.SeedIfEmpty(db, cfg.Storage.PublishDir, cfg.Storage.DataDir)
 
 	productSvc := &service.ProductService{DB: db}
@@ -86,6 +82,8 @@ func main() {
 
 	// Auth
 	auth := e.Group("/api/v1/auth")
+	auth.GET("/setup/status", authHandler.SetupStatus)
+	auth.POST("/setup", authHandler.Setup)
 	auth.POST("/login", authHandler.Login)
 
 	// Admin API (requires authentication)
@@ -132,24 +130,3 @@ func main() {
 	log.Fatal(e.Start(addr))
 }
 
-func ensureAdminUser(db *gorm.DB, cfg *config.Config) {
-	var count int64
-	db.Model(&model.User{}).Count(&count)
-	if count > 0 {
-		return
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(cfg.Auth.Password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Fatalf("Failed to hash password: %v", err)
-	}
-
-	user := model.User{
-		Username:     cfg.Auth.Username,
-		PasswordHash: string(hash),
-	}
-	if err := db.Create(&user).Error; err != nil {
-		log.Fatalf("Failed to create admin user: %v", err)
-	}
-	log.Printf("Created admin user: %s", cfg.Auth.Username)
-}

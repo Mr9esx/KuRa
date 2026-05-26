@@ -52,6 +52,13 @@ export const auth = {
       '/auth/login',
       { username, password }
     ),
+  setupStatus: () =>
+    api.get<{ needs_setup: boolean }>('/auth/setup/status'),
+  setup: (username: string, password: string) =>
+    api.post<{ success: boolean; user: { id: number; username: string } }>(
+      '/auth/setup',
+      { username, password }
+    ),
 }
 
 export interface Product {

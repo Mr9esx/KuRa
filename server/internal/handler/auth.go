@@ -22,6 +22,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type SetupRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type LoginResponse struct {
 	Token string `json:"token"`
 	User  struct {
@@ -72,5 +77,56 @@ func (h *AuthHandler) Me(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"id":       userID,
 		"username": username,
+	})
+}
+
+func (h *AuthHandler) SetupStatus(c echo.Context) error {
+	var count int64
+	h.DB.Model(&model.User{}).Count(&count)
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"needs_setup": count == 0,
+	})
+}
+
+func (h *AuthHandler) Setup(c echo.Context) error {
+	var count int64
+	h.DB.Model(&model.User{}).Count(&count)
+	if count > 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "管理员账号已存在，无法重复初始化",
+		})
+	}
+
+	var req SetupRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+
+	if len(req.Username) < 2 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "用户名至少2个字符"})
+	}
+	if len(req.Password) < 6 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "密码至少6个字符"})
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
+	}
+
+	user := model.User{
+		Username:     req.Username,
+		PasswordHash: string(hash),
+	}
+	if err := h.DB.Create(&user).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"user": map[string]interface{}{
+			"id":       user.ID,
+			"username": user.Username,
+		},
 	})
 }
