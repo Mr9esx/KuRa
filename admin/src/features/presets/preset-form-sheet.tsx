@@ -153,6 +153,42 @@ export function PresetFormSheet({
     []
   )
 
+  const detectConflicts = useCallback(() => {
+    const conflicts: string[] = []
+    for (let i = 0; i < items.length; i++) {
+      const a = items[i]!
+      const pa = productBysku(a.product_sku)
+      if (!pa) continue
+      for (let j = i + 1; j < items.length; j++) {
+        const b = items[j]!
+        const pb = productBysku(b.product_sku)
+        if (!pb) continue
+        const overlapX =
+          a.cell_x < b.cell_x + pb.grid_cols &&
+          a.cell_x + pa.grid_cols > b.cell_x
+        const overlapY =
+          a.cell_y < b.cell_y + pb.grid_rows &&
+          a.cell_y + pa.grid_rows > b.cell_y
+        if (overlapX && overlapY) {
+          conflicts.push(
+            `${pa.sku_name}(${a.cell_x},${a.cell_y}) 与 ${pb.sku_name}(${b.cell_x},${b.cell_y}) 重叠`
+          )
+        }
+      }
+      if (gridCols > 0 && gridRows > 0) {
+        if (
+          a.cell_x + pa.grid_cols > gridCols ||
+          a.cell_y + pa.grid_rows > gridRows
+        ) {
+          conflicts.push(
+            `${pa.sku_name}(${a.cell_x},${a.cell_y}) 超出网格范围`
+          )
+        }
+      }
+    }
+    return conflicts
+  }, [items, allProducts, gridCols, gridRows])
+
   const handleSubmit = async () => {
     if (!form.preset_id || !form.name || !form.block_sku) {
       toast.error('方案ID、名称和框体SKU为必填项')
@@ -162,6 +198,17 @@ export function PresetFormSheet({
     const emptyItem = items.find((it) => !it.product_sku)
     if (emptyItem) {
       toast.error('物件列表中存在未选择产品的条目')
+      return
+    }
+
+    const conflicts = detectConflicts()
+    if (conflicts.length > 0) {
+      toast.error(`物件布局冲突：${conflicts[0]}`, {
+        description:
+          conflicts.length > 1
+            ? `还有 ${conflicts.length - 1} 个冲突`
+            : undefined,
+      })
       return
     }
 
@@ -303,16 +350,34 @@ export function PresetFormSheet({
               value={form.block_sku}
               onValueChange={(v) => setForm({ ...form, block_sku: v })}
             >
-              <SelectTrigger>
+              <SelectTrigger className='w-full'>
                 <SelectValue placeholder='选择框体' />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className='max-h-[300px] w-[var(--radix-select-trigger-width)]'>
                 {blockProducts.map((b) => (
                   <SelectItem key={b.sku} value={b.sku}>
-                    {b.sku_name}（{b.sku}）
-                    {b.cell_cols && b.cell_rows
-                      ? ` — ${b.cell_cols}×${b.cell_rows} 格`
-                      : ''}
+                    <div className='flex items-center gap-2'>
+                      {b.image_path ? (
+                        <img
+                          src={`/files/${b.image_path}`}
+                          alt={b.sku_name}
+                          className='h-8 w-8 shrink-0 rounded object-contain bg-muted'
+                        />
+                      ) : (
+                        <div className='flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted'>
+                          <ImageIcon className='h-4 w-4 text-muted-foreground' />
+                        </div>
+                      )}
+                      <div className='min-w-0'>
+                        <p className='truncate text-sm'>{b.sku_name}</p>
+                        <p className='text-[10px] text-muted-foreground'>
+                          {b.sku}
+                          {b.cell_cols && b.cell_rows
+                            ? ` · ${b.cell_cols}×${b.cell_rows} 格`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -360,10 +425,10 @@ export function PresetFormSheet({
                         updateItem(item.key, 'product_sku', v)
                       }
                     >
-                      <SelectTrigger className='h-8 text-xs'>
+                      <SelectTrigger className='h-9 text-xs w-full'>
                         <SelectValue placeholder='选择物件/增高件' />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className='max-h-[320px] w-[var(--radix-select-trigger-width)]'>
                         {itemProducts.length > 0 && (
                           <>
                             <div className='px-2 py-1 text-[10px] font-medium text-muted-foreground'>
@@ -371,7 +436,27 @@ export function PresetFormSheet({
                             </div>
                             {itemProducts.map((p) => (
                               <SelectItem key={p.sku} value={p.sku}>
-                                {p.sku_name}（{p.grid_cols}×{p.grid_rows}）
+                                <div className='flex items-center gap-2'>
+                                  {p.image_path ? (
+                                    <img
+                                      src={`/files/${p.image_path}`}
+                                      alt={p.sku_name}
+                                      className='h-7 w-7 shrink-0 rounded object-contain bg-muted'
+                                    />
+                                  ) : (
+                                    <div className='flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted'>
+                                      <ImageIcon className='h-3.5 w-3.5 text-muted-foreground' />
+                                    </div>
+                                  )}
+                                  <div className='min-w-0'>
+                                    <p className='truncate text-xs'>
+                                      {p.sku_name}
+                                    </p>
+                                    <p className='text-[10px] text-muted-foreground'>
+                                      {p.grid_cols}×{p.grid_rows}
+                                    </p>
+                                  </div>
+                                </div>
                               </SelectItem>
                             ))}
                           </>
@@ -383,8 +468,28 @@ export function PresetFormSheet({
                             </div>
                             {riserProducts.map((p) => (
                               <SelectItem key={p.sku} value={p.sku}>
-                                {p.sku_name}（{p.grid_cols}×{p.grid_rows}
-                                ，H{p.height}）
+                                <div className='flex items-center gap-2'>
+                                  {p.image_path ? (
+                                    <img
+                                      src={`/files/${p.image_path}`}
+                                      alt={p.sku_name}
+                                      className='h-7 w-7 shrink-0 rounded object-contain bg-muted'
+                                    />
+                                  ) : (
+                                    <div className='flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted'>
+                                      <ImageIcon className='h-3.5 w-3.5 text-muted-foreground' />
+                                    </div>
+                                  )}
+                                  <div className='min-w-0'>
+                                    <p className='truncate text-xs'>
+                                      {p.sku_name}
+                                    </p>
+                                    <p className='text-[10px] text-muted-foreground'>
+                                      {p.grid_cols}×{p.grid_rows} · H
+                                      {p.height}
+                                    </p>
+                                  </div>
+                                </div>
                               </SelectItem>
                             ))}
                           </>

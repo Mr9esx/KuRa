@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { products, type Product } from '@/lib/api-client'
@@ -55,9 +56,14 @@ export default function Products() {
   }
 
   const handleDelete = async (sku: string) => {
-    if (!confirm(`确认删除 ${sku}？`)) return
-    await products.delete(sku)
-    fetchProducts(activeTab)
+    if (!confirm(`确认删除 ${sku}？此操作不可撤销。`)) return
+    try {
+      await products.delete(sku)
+      toast.success(`已删除 ${sku}`)
+      fetchProducts(activeTab)
+    } catch (e) {
+      toast.error((e as Error).message || '删除失败')
+    }
   }
 
   return (

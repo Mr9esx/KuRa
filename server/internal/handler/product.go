@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/Mr9esx/RiSu/server/internal/model"
 	"github.com/Mr9esx/RiSu/server/internal/service"
@@ -124,6 +125,9 @@ func (h *ProductHandler) Update(c echo.Context) error {
 func (h *ProductHandler) Delete(c echo.Context) error {
 	sku := c.Param("sku")
 	if err := h.Service.Delete(sku); err != nil {
+		if strings.Contains(err.Error(), "无法删除") {
+			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
+		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusNoContent, nil)

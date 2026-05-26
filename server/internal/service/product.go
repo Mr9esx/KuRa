@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/Mr9esx/RiSu/server/internal/model"
 	"gorm.io/gorm"
 )
@@ -90,5 +92,17 @@ func (s *ProductService) Update(sku string, updates map[string]interface{}) (*mo
 }
 
 func (s *ProductService) Delete(sku string) error {
+	var itemRefCount int64
+	s.DB.Model(&model.PresetItem{}).Where("product_sku = ?", sku).Count(&itemRefCount)
+	if itemRefCount > 0 {
+		return fmt.Errorf("该产品被 %d 个预设方案引用，无法删除", itemRefCount)
+	}
+
+	var blockRefCount int64
+	s.DB.Model(&model.Preset{}).Where("block_sku = ?", sku).Count(&blockRefCount)
+	if blockRefCount > 0 {
+		return fmt.Errorf("该框体被 %d 个预设方案使用，无法删除", blockRefCount)
+	}
+
 	return s.DB.Where("sku = ?", sku).Delete(&model.Product{}).Error
 }
