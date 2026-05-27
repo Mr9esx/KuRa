@@ -12,6 +12,7 @@ import { type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
 import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
+import { TitleLogo } from "@/components/brand/title-logo"
 
 const emptyDragImage = (() => {
   const canvas = document.createElement("canvas")
@@ -650,9 +651,9 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <AppLogo className="size-5" />
-            <span className="text-lg font-semibold tracking-tight">{APP_PAGE_TITLE}</span>
+            <TitleLogo className="h-4 w-auto" />
           </div>
           <div className="flex items-center gap-0.5">
             <TourReplayButton />
