@@ -109,7 +109,7 @@ function getSteps(mobile: boolean): TourStep[] {
       title: "导入导出入口在这里",
       desc: mobile
         ? "下方工具栏这个图标就是导入导出入口，之后随时可以在这里导出或导入布局。"
-        : "工具栏左侧这里就是导入导出入口，之后随时可以在这里导出或导入布局。",
+        : "工具栏左侧「导出」「导入」菜单可分别导出布局 JSON 或从 JSON 导入布局。",
       targetId: mobile ? "tour-m-export" : "tour-export",
       position: mobile ? "top" : "bottom",
       showHintStatus: false,

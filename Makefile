@@ -1,4 +1,4 @@
-.PHONY: dev dev-app dev-admin dev-server migrate build
+.PHONY: dev dev-app dev-admin dev-server migrate build deploy
 
 # Start all services for local development
 dev:
@@ -26,3 +26,7 @@ build:
 	pnpm --filter app build
 	pnpm --filter admin build
 	cd server && go build -o risu-server ./cmd/
+
+# Deploy to production (local build + SSH)
+deploy:
+	bash deploy/local-deploy.sh

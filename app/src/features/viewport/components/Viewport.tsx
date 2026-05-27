@@ -23,6 +23,7 @@ import {
   EXPORT_PREFIX,
 } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
+import { TitleLogo } from "@/components/brand/title-logo"
 import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
 import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, AlertTriangle, Info } from "lucide-react"
@@ -98,6 +99,13 @@ function buildShoppingList(placements: Placement[]): ShoppingListItem[] {
       qty,
     }))
     .sort((a, b) => a.sku.localeCompare(b.sku))
+}
+
+function createLayoutPayload(block: BlockCatalogItem, placements: Placement[]): ImportedLayoutData {
+  return {
+    blockSku: block.sku,
+    placements: placements.map((p) => ({ sku: p.sku, cell: p.cell })),
+  }
 }
 
 function createModelPayload(block: BlockCatalogItem, placements: Placement[]) {
@@ -189,6 +197,14 @@ function trackExport(exportType: string, block: BlockCatalogItem, placements: Pl
   })
 }
 
+async function exportLayout(block: BlockCatalogItem, placements: Placement[]) {
+  trackExport("layout", block, placements)
+  const { saveAs } = await import("file-saver")
+  const payload = createLayoutPayload(block, placements)
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+  saveAs(blob, `${EXPORT_PREFIX}-layout-${Date.now()}.json`)
+}
+
 async function exportModel(block: BlockCatalogItem, placements: Placement[]) {
   trackExport("model", block, placements)
   const { JSZip, saveAs } = await loadExportDeps()
@@ -232,15 +248,13 @@ function normalizeImportedLayout(raw: unknown): ImportedLayoutData {
   }
   const data = raw as {
     blockSku?: unknown
-    block?: { sku?: unknown }
     placements?: unknown
   }
-  const blockSku = (typeof data.blockSku === "string" ? data.blockSku : data.block?.sku) as
-    | string
-    | undefined
-  if (!blockSku) {
+
+  if (typeof data.blockSku !== "string" || !data.blockSku) {
     throw new Error("导入文件缺少 blockSku")
   }
+  const blockSku = data.blockSku
 
   const rawPlacements = Array.isArray(data.placements) ? data.placements : []
   const placements: Array<{ sku: string; cell: [number, number] }> = []
@@ -254,7 +268,20 @@ function normalizeImportedLayout(raw: unknown): ImportedLayoutData {
     if (!Number.isFinite(col) || !Number.isFinite(row)) continue
     placements.push({ sku, cell: [Math.trunc(col), Math.trunc(row)] })
   }
+  if (placements.length === 0 && rawPlacements.length > 0) {
+    throw new Error("导入文件中的放置项无效")
+  }
   return { blockSku, placements }
+}
+
+function parseLayoutJsonText(text: string): ImportedLayoutData {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error("JSON 解析失败")
+  }
+  return normalizeImportedLayout(parsed)
 }
 
 function logViewportDnD(...args: unknown[]) {
@@ -267,9 +294,7 @@ async function parseImportedLayoutFile(file: File): Promise<ImportedLayoutData> 
   if (!lower.endsWith(".json")) {
     throw new Error("仅支持导入 JSON 文件")
   }
-
-  const text = await file.text()
-  return normalizeImportedLayout(JSON.parse(text))
+  return parseLayoutJsonText(await file.text())
 }
 
 function setPresetQueryParam(presetId: string) {
@@ -580,7 +605,31 @@ function Scene({
   )
 }
 
-function FpsTracker({ onUpdate }: { onUpdate: (fps: number, mem: number | null) => void }) {
+/** pointer-events-none 不会继承，子节点默认可交互；HUD 等叠层需阻断整棵子树。 */
+const VIEWPORT_OVERLAY =
+  "pointer-events-none select-none [-webkit-touch-callout:none] [&_*]:pointer-events-none [&_*]:select-none"
+
+/** 可点击工具栏：保持 pointer-events，同时禁止 iOS 长按选中文字/图片。 */
+const VIEWPORT_CHROME =
+  "pointer-events-auto touch-manipulation select-none [-webkit-touch-callout:none] [&_*]:select-none [&_img]:select-none [&_svg]:select-none [&_button]:pointer-events-auto [&_a]:pointer-events-auto [&_[role=button]]:pointer-events-auto"
+
+function formatMemLabel(gl: THREE.WebGLRenderer): string {
+  const perf = performance as Performance & { memory?: { usedJSHeapSize: number } }
+  if (perf.memory?.usedJSHeapSize) {
+    return `${Math.round(perf.memory.usedJSHeapSize / 1048576)} MB`
+  }
+
+  // iOS Safari does not expose performance.memory; show WebGL resource counts instead.
+  const { textures, geometries } = gl.info.memory
+  if (textures > 0 || geometries > 0) {
+    return `${textures} tex · ${geometries} geo`
+  }
+
+  return "--"
+}
+
+function FpsTracker({ onUpdate }: { onUpdate: (fps: number, memLabel: string) => void }) {
+  const gl = useThree((s) => s.gl)
   const frames = useRef(0)
   const lastTime = useRef(performance.now())
 
@@ -590,9 +639,7 @@ function FpsTracker({ onUpdate }: { onUpdate: (fps: number, mem: number | null) 
     const elapsed = now - lastTime.current
     if (elapsed >= 1000) {
       const fps = Math.round((frames.current * 1000) / elapsed)
-      const perf = performance as Performance & { memory?: { usedJSHeapSize: number } }
-      const mem = perf.memory ? Math.round(perf.memory.usedJSHeapSize / 1048576) : null
-      onUpdate(fps, mem)
+      onUpdate(fps, formatMemLabel(gl))
       frames.current = 0
       lastTime.current = now
     }
@@ -719,10 +766,17 @@ function PresetSelector({
 function MobileTopBar() {
   const [aboutOpen, setAboutOpen] = useState(false)
   return (
-    <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
-      <div className="flex items-center gap-1">
-        <AppLogo className="size-4" />
-        <span className="text-sm font-semibold tracking-tight">{APP_PAGE_TITLE}</span>
+    <div
+      data-viewport-chrome
+      className={cn(
+        VIEWPORT_CHROME,
+        "flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md",
+      )}
+      onTouchStart={() => window.getSelection()?.removeAllRanges()}
+    >
+      <div className="flex items-center gap-1.5">
+        <AppLogo className="size-5" />
+        <TitleLogo className="h-4 w-auto" />
       </div>
       <div className="flex items-center gap-0.5">
         <Tooltip>
@@ -738,7 +792,7 @@ function MobileTopBar() {
               />
             }
           >
-            <CircleHelp className="size-4" strokeWidth={2.2} />
+            <CircleHelp className="size-[18px]" strokeWidth={2.2} />
           </TooltipTrigger>
           <TooltipContent>功能引导</TooltipContent>
         </Tooltip>
@@ -755,7 +809,7 @@ function MobileTopBar() {
               />
             }
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" className="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path stroke="none" d="M0 0h24v24H0z" fill="none" />
               <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
               <path d="M12 3l0 18" />
@@ -776,7 +830,7 @@ function MobileTopBar() {
               />
             }
           >
-            <Info className="size-4" strokeWidth={2.2} />
+            <Info className="size-[18px]" strokeWidth={2.2} />
           </TooltipTrigger>
           <TooltipContent>关于</TooltipContent>
         </Tooltip>
@@ -792,7 +846,12 @@ function MobileTopBar() {
               />
             }
           >
-            <img src="/xiaohongshu.svg" alt="小红书" className="size-4" />
+            <img
+              src="/xiaohongshu.svg"
+              alt="小红书"
+              draggable={false}
+              className="pointer-events-none size-[18px] select-none"
+            />
           </HoverCardTrigger>
           <HoverCardContent side="bottom" align="end">
             <div className="flex flex-col gap-2">
@@ -850,6 +909,25 @@ export function MobileActionBar() {
     return () => window.removeEventListener("resize", update)
   }, [])
 
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (
+        target.closest(
+          '[data-slot="navigation-menu-trigger"], [data-slot="navigation-menu-content"], [data-slot="navigation-menu-popup"], [data-slot="navigation-menu-positioner"]',
+        )
+      ) {
+        return
+      }
+      barRef.current
+        ?.querySelectorAll<HTMLElement>('[data-slot="navigation-menu-trigger"]')
+        .forEach((trigger) => trigger.blur())
+    }
+    document.addEventListener("pointerdown", onPointerDown, true)
+    return () => document.removeEventListener("pointerdown", onPointerDown, true)
+  }, [])
+
   const handleDelete = () => {
     if (!selectedPlacementId) return
     setConfirmDeleteOpen(true)
@@ -861,6 +939,7 @@ export function MobileActionBar() {
   }
 
   const exportFnMap: Record<ExportType, () => void | Promise<void>> = {
+    layout: () => exportLayout(block, placements),
     model: () => exportModel(block, placements),
     shopping: () => exportShoppingXlsx(block, placements),
     all: () => exportAll(block, placements),
@@ -910,7 +989,7 @@ export function MobileActionBar() {
   }
 
   const iconTrigger =
-    "inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground [&>svg+svg]:hidden"
+    "inline-flex size-9 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-muted hover:text-foreground focus:bg-transparent focus:text-foreground/65 focus-visible:bg-muted focus-visible:text-foreground data-[pressed]:not-data-popup-open:bg-transparent data-[pressed]:not-data-popup-open:text-foreground/65 data-popup-open:bg-muted data-popup-open:text-foreground data-popup-open:focus:bg-muted data-popup-open:focus:text-foreground [&>svg+svg]:hidden"
 
   return (
     <div ref={barRef} className="flex items-center gap-0.5">
@@ -978,6 +1057,12 @@ export function MobileActionBar() {
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   全部导出（ZIP）
+                </button>
+                <button
+                  onClick={() => openExportPreview("layout")}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  导出布局（JSON）
                 </button>
                 <div className="my-1 h-px bg-border" />
                 <div className="px-2.5 py-1 text-xs font-semibold text-muted-foreground">导入</div>
@@ -1172,6 +1257,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   }
 
   const exportFnMap: Record<ExportType, () => void | Promise<void>> = {
+    layout: () => exportLayout(block, placements),
     model: () => exportModel(block, placements),
     shopping: () => exportShoppingXlsx(block, placements),
     all: () => exportAll(block, placements),
@@ -1271,6 +1357,12 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
             <NavigationMenuContent>
               <div className="flex min-w-[180px] flex-col gap-1 p-2">
                 <button
+                  onClick={() => openExportPreview("layout")}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  导出布局（JSON）
+                </button>
+                <button
                   onClick={() => openExportPreview("model")}
                   className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
@@ -1292,15 +1384,19 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
             </NavigationMenuContent>
           </NavigationMenuItem>
           <NavigationMenuItem>
-            <NavigationMenuTrigger
-              id="tour-import"
-              onClick={handleOpenImportPicker}
-              className="h-8 px-2.5 text-xs"
-              aria-label="导入"
-              title="导入布局（JSON）"
-            >
+            <NavigationMenuTrigger id="tour-import" className="h-8 px-2.5 text-xs">
               导入
             </NavigationMenuTrigger>
+            <NavigationMenuContent>
+              <div className="flex min-w-[180px] flex-col gap-1 p-2">
+                <button
+                  onClick={handleOpenImportPicker}
+                  className="rounded-md px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  导入布局（JSON）
+                </button>
+              </div>
+            </NavigationMenuContent>
           </NavigationMenuItem>
         </NavigationMenuList>
       </NavigationMenu>
@@ -1331,7 +1427,12 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
   return (
     <div
       ref={toolbarRef}
-      className="pointer-events-auto flex w-full items-center gap-2 rounded-xl border border-border bg-background/80 px-1 py-1 backdrop-blur-md"
+      data-viewport-chrome
+      className={cn(
+        VIEWPORT_CHROME,
+        "flex w-full items-center gap-2 rounded-xl border border-border bg-background/80 px-1 py-1 backdrop-blur-md",
+      )}
+      onTouchStart={() => window.getSelection()?.removeAllRanges()}
     >
       <div className="flex min-w-0 flex-1 items-center">
         <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
@@ -1462,7 +1563,7 @@ function ViewportToolbar({ mobile }: { mobile?: boolean }) {
 
 export function Viewport({ mobile }: { mobile?: boolean }) {
   const [fps, setFps] = useState<number | null>(null)
-  const [mem, setMem] = useState<number | null>(null)
+  const [memLabel, setMemLabel] = useState("--")
   const [draggingSku, setDraggingSku] = useState<string | null>(null)
   const [pointerPlacingActive, setPointerPlacingActive] = useState(false)
   const dragPlacedRef = useRef(false)
@@ -1485,6 +1586,23 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
   const lastDragClientRef = useRef<{ x: number; y: number } | null>(null)
   const pointerPlaceStartRef = useRef<{ x: number; y: number } | null>(null)
   const pointerPlaceMovedRef = useRef(false)
+  const viewportRootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const root = viewportRootRef.current
+    if (!root) return
+
+    const blockNativeSelection = (event: Event) => {
+      event.preventDefault()
+    }
+
+    root.addEventListener("selectstart", blockNativeSelection, true)
+    root.addEventListener("contextmenu", blockNativeSelection, true)
+    return () => {
+      root.removeEventListener("selectstart", blockNativeSelection, true)
+      root.removeEventListener("contextmenu", blockNativeSelection, true)
+    }
+  }, [])
 
   const bindSceneContext = (camera: THREE.Camera, canvas: HTMLCanvasElement) => {
     cameraRef.current = camera
@@ -1774,8 +1892,12 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
 
   return (
     <div
+      ref={viewportRootRef}
       id="tour-viewport"
-      className="relative h-full w-full bg-[#faf9f7] dark:bg-[#1a1a1a]"
+      className={cn(
+        "relative h-full w-full bg-[#faf9f7] dark:bg-[#1a1a1a]",
+        "select-none touch-none [-webkit-touch-callout:none] [&_*]:select-none",
+      )}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onDragLeave={() => setHoveredCell(null)}
@@ -1832,8 +1954,13 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         pointerPlaceMovedRef.current = false
         setHoveredCell(null)
       }}
+      onTouchStart={() => {
+        if (!mobile) return
+        window.getSelection()?.removeAllRanges()
+      }}
       onTouchMove={(e) => {
         if (!mobile) return
+        window.getSelection()?.removeAllRanges()
         const touch = e.touches[0]
         if (!touch) return
         handleMobileGhostMove(touch.clientX, touch.clientY)
@@ -1856,17 +1983,17 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
           onBlockLoadStateChange={setBlockLoadState}
         />
         <SceneBridge onReady={bindSceneContext} />
-        <FpsTracker onUpdate={(f, m) => { setFps(f); setMem(m) }} />
+        <FpsTracker onUpdate={(f, m) => { setFps(f); setMemLabel(m) }} />
       </UnifiedPreviewCanvas>
       {blockLoadState.loading && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[90] flex -translate-y-1/2 justify-center">
+        <div className={cn(VIEWPORT_OVERLAY, "absolute inset-x-0 top-1/2 z-[90] flex -translate-y-1/2 justify-center")}>
           <div className="rounded-md bg-black/35 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
             框体加载中...
           </div>
         </div>
       )}
       {blockLoadState.failed && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[90] flex -translate-y-1/2 justify-center">
+        <div className={cn(VIEWPORT_OVERLAY, "absolute inset-x-0 top-1/2 z-[90] flex -translate-y-1/2 justify-center")}>
           <div className="rounded-md bg-red-600/80 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
             框体加载失败，请刷新重试
           </div>
@@ -1876,10 +2003,10 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         <ViewportToolbar mobile={mobile} />
       </div>
       <ViewportHUD />
-      <div className="pointer-events-none absolute top-16 right-4 text-xs text-muted-foreground/25">
+      <div className={cn(VIEWPORT_OVERLAY, "absolute top-15 right-4 text-[10px] text-muted-foreground/25")} inert>
         <div className="flex items-center gap-2 whitespace-nowrap">
           <span>FPS: {fps ?? "--"}</span>
-          <span>Mem: {mem !== null ? `${mem} MB` : "--"}</span>
+          <span title="Chromium: JS heap MB; iOS Safari: WebGL texture/geo counts">Mem: {memLabel}</span>
           <span>{APP_PAGE_TITLE} by {APP_AUTHOR_NAME} · {APP_LICENSE_NAME}</span>
         </div>
       </div>
@@ -2046,9 +2173,10 @@ function ValidationWarningDialog({
   )
 }
 
-type ExportType = "model" | "shopping" | "all"
+type ExportType = "layout" | "model" | "shopping" | "all"
 
 const EXPORT_LABELS: Record<ExportType, string> = {
+  layout: "导出布局（JSON）",
   model: "导出模型（ZIP）",
   shopping: "导出购物清单（XLSX）",
   all: "全部导出（ZIP）",
@@ -2155,7 +2283,7 @@ function ViewportHUD() {
   )
 
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3">
+    <div className={cn(VIEWPORT_OVERLAY, "absolute bottom-3 left-3")} inert>
       <div className="rounded-lg bg-white/80 px-3 py-2 text-xs backdrop-blur-sm dark:bg-black/60">
         <div className="font-medium text-foreground">{block.display_name}</div>
         <div className="text-muted-foreground">

@@ -13,3 +13,7 @@ server/data/risu.db
 server/data/models/
 server/data/images/
 server/risu-server
+server/risu-release-recorder
+
+# Local build output
+.build/

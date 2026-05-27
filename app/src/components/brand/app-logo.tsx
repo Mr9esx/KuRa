@@ -7,6 +7,11 @@ interface AppLogoProps {
 
 export function AppLogo({ className }: AppLogoProps) {
   return (
-    <img src={appLogoUrl} alt="Logo" className={cn("block object-contain", className)} />
+    <img
+      src={appLogoUrl}
+      alt="Logo"
+      draggable={false}
+      className={cn("block object-contain select-none [-webkit-user-drag:none]", className)}
+    />
   )
 }
