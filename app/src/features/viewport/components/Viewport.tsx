@@ -23,6 +23,7 @@ import {
   EXPORT_PREFIX,
 } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
+import { TitleLogo } from "@/components/brand/title-logo"
 import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
 import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, AlertTriangle, Info } from "lucide-react"
@@ -720,9 +721,9 @@ function MobileTopBar() {
   const [aboutOpen, setAboutOpen] = useState(false)
   return (
     <div className="pointer-events-auto flex w-full items-center justify-between rounded-xl border border-border bg-background/80 px-3 py-1.5 backdrop-blur-md">
-      <div className="flex items-center gap-1">
-        <AppLogo className="size-4" />
-        <span className="text-sm font-semibold tracking-tight">{APP_PAGE_TITLE}</span>
+      <div className="flex items-center gap-1.5">
+        <AppLogo className="size-5" />
+        <TitleLogo className="h-4 w-auto" />
       </div>
       <div className="flex items-center gap-0.5">
         <Tooltip>
@@ -738,7 +739,7 @@ function MobileTopBar() {
               />
             }
           >
-            <CircleHelp className="size-4" strokeWidth={2.2} />
+            <CircleHelp className="size-[18px]" strokeWidth={2.2} />
           </TooltipTrigger>
           <TooltipContent>功能引导</TooltipContent>
         </Tooltip>
@@ -755,7 +756,7 @@ function MobileTopBar() {
               />
             }
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" className="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path stroke="none" d="M0 0h24v24H0z" fill="none" />
               <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
               <path d="M12 3l0 18" />
@@ -776,7 +777,7 @@ function MobileTopBar() {
               />
             }
           >
-            <Info className="size-4" strokeWidth={2.2} />
+            <Info className="size-[18px]" strokeWidth={2.2} />
           </TooltipTrigger>
           <TooltipContent>关于</TooltipContent>
         </Tooltip>
@@ -792,7 +793,7 @@ function MobileTopBar() {
               />
             }
           >
-            <img src="/xiaohongshu.svg" alt="小红书" className="size-4" />
+            <img src="/xiaohongshu.svg" alt="小红书" className="size-[18px]" />
           </HoverCardTrigger>
           <HoverCardContent side="bottom" align="end">
             <div className="flex flex-col gap-2">
