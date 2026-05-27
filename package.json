@@ -1,6 +1,7 @@
 {
   "name": "risu-workspace",
   "private": true,
+  "packageManager": "pnpm@10.12.4",
   "scripts": {
     "dev": "concurrently \"pnpm --filter app dev\" \"pnpm --filter admin dev\"",
     "dev:app": "pnpm --filter app dev",

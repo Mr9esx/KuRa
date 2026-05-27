@@ -47,6 +47,13 @@ export function UnifiedPreviewCanvas({
         const gl = state.gl as THREE.WebGLRenderer
         gl.localClippingEnabled = true
         gl.toneMappingExposure = PREVIEW_TONE.exposure
+        const canvas = gl.domElement
+        canvas.classList.add("touch-none", "select-none")
+        canvas.style.touchAction = "none"
+        canvas.style.userSelect = "none"
+        canvas.style.webkitUserSelect = "none"
+        canvas.style.webkitTouchCallout = "none"
+        canvas.oncontextmenu = (event) => event.preventDefault()
         onCreated?.(state)
       }}
       onPointerMissed={onPointerMissed}
