@@ -17,7 +17,6 @@ import {
   APP_LICENSE_NAME,
   APP_LICENSE_URL,
   APP_PAGE_TITLE,
-  APP_SOCIAL,
   CUSTOM_EVENTS,
   DATA_TRANSFER_TYPE,
   EXPORT_PREFIX,
@@ -31,7 +30,6 @@ import { validateLayout, type LayoutProblem } from "@/engine/export-validation"
 import { trackEvent } from "@/lib/analytics"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import {
   NavigationMenu,
   NavigationMenuList,
@@ -834,40 +832,6 @@ function MobileTopBar() {
           </TooltipTrigger>
           <TooltipContent>关于</TooltipContent>
         </Tooltip>
-        <HoverCard>
-          <HoverCardTrigger
-            render={
-              <a
-                href="https://xhslink.com/m/4vWuwtptST2"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md p-1.5 transition-colors hover:bg-muted"
-                aria-label="小红书"
-              />
-            }
-          >
-            <img
-              src="/xiaohongshu.svg"
-              alt="小红书"
-              draggable={false}
-              className="pointer-events-none size-[18px] select-none"
-            />
-          </HoverCardTrigger>
-          <HoverCardContent side="bottom" align="end">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
-                <div>
-                  <p className="text-sm font-semibold">{APP_SOCIAL.xiaohongshu.label}</p>
-                  <p className="text-xs text-muted-foreground">{APP_SOCIAL.xiaohongshu.account}</p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                关注我们的小红书，获取最新的模型展示、搭配灵感和使用技巧！
-              </p>
-            </div>
-          </HoverCardContent>
-        </HoverCard>
         <AboutLicenseDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       </div>
     </div>
@@ -1754,8 +1718,9 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         mobile,
       })
 
-      if (mobile) {
-        // On mobile, drag end may fire before touchend; defer cleanup briefly.
+      const hasTouch = mobile || !!lastTouchClient
+      if (hasTouch) {
+        // Touch drag: dragend may fire before touchend; defer cleanup briefly.
         if (mobileEndFallbackTimer) clearTimeout(mobileEndFallbackTimer)
         mobileEndFallbackTimer = setTimeout(() => {
           if (
@@ -1955,12 +1920,11 @@ export function Viewport({ mobile }: { mobile?: boolean }) {
         setHoveredCell(null)
       }}
       onTouchStart={() => {
-        if (!mobile) return
         window.getSelection()?.removeAllRanges()
       }}
       onTouchMove={(e) => {
-        if (!mobile) return
         window.getSelection()?.removeAllRanges()
+        if (!mobile) return
         const touch = e.touches[0]
         if (!touch) return
         handleMobileGhostMove(touch.clientX, touch.clientY)
