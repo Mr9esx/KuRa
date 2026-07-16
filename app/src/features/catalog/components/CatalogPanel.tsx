@@ -5,12 +5,11 @@ import { useCatalog } from "@/hooks/use-catalog"
 import { MobileActionBar } from "@/features/viewport"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
 import { type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
-import { APP_PAGE_TITLE, APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
+import { CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
 import { TitleLogo } from "@/components/brand/title-logo"
 
@@ -456,7 +455,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
   if (mobile) {
     return (
-      <div className="flex flex-col overflow-hidden border-t border-border bg-background">
+      <div className="flex select-none flex-col overflow-hidden border-t border-border bg-background [-webkit-touch-callout:none]">
         <div className="flex items-center gap-2 px-4 pt-2 pb-1">
           <div id="tour-m-block-picker" className="grid min-w-0 flex-1 grid-cols-2 rounded-xl border border-border p-1">
             <button
@@ -531,7 +530,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                       onTouchEnd={handleTouchEnd}
                       onTouchCancel={handleTouchEnd}
                       className={cn(
-                        "group flex h-full shrink-0 w-[110px] flex-col rounded-lg border p-2 text-left transition-all",
+                        "group flex h-full shrink-0 w-[110px] select-none flex-col rounded-lg border p-2 text-left transition-all",
                         selectedSku === item.sku
                           ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
                           : "border-border hover:border-foreground/30 hover:bg-muted/50",
@@ -645,7 +644,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
 
   return (
     <div className={cn(
-      "flex h-full flex-col border-r border-border bg-background transition-[width]",
+      "flex h-full select-none flex-col border-r border-border bg-background transition-[width] [-webkit-touch-callout:none]",
       narrow ? "w-56" : "w-72",
     )}>
       {/* Header */}
@@ -658,35 +657,6 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
           <div className="flex items-center gap-0.5">
             <TourReplayButton />
             <ThemeToggleButton />
-            <HoverCard>
-              <HoverCardTrigger
-                render={
-                  <a
-                    href="https://xhslink.com/m/4vWuwtptST2"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="-mr-1.5 rounded-md p-1 transition-colors hover:bg-muted"
-                    aria-label="小红书"
-                  />
-                }
-              >
-                <img src="/xiaohongshu.svg" alt="小红书" className="size-[18px]" />
-              </HoverCardTrigger>
-              <HoverCardContent side="bottom" align="end">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <img src="/xiaohongshu.svg" alt="小红书" className="size-8" />
-                    <div>
-                      <p className="text-sm font-semibold">{APP_SOCIAL.xiaohongshu.label}</p>
-                      <p className="text-xs text-muted-foreground">{APP_SOCIAL.xiaohongshu.account}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    关注我们的小红书，获取最新的模型展示、搭配灵感和使用技巧！
-                  </p>
-                </div>
-              </HoverCardContent>
-            </HoverCard>
           </div>
         </div>
         <div className="mt-4">
@@ -812,12 +782,16 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
                 <button
                   key={item.sku}
                   id={isFirstItem ? "tour-first-item" : undefined}
-                  onClick={() => selectItem(item.sku)}
+                  onClick={() => handleMobileItemClick(item.sku)}
                   draggable
                   onDragStart={(e) => handleDragStart(e, item.sku)}
                   onDragEnd={handleDragEnd}
+                  onTouchStart={(e) => handleTouchStart(e, item.sku)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
                   className={cn(
-                    "group flex flex-col rounded-lg border p-2.5 text-left transition-all",
+                    "group flex select-none flex-col rounded-lg border p-2.5 text-left transition-all",
                     selectedSku === item.sku
                       ? "border-foreground bg-foreground/[0.03] ring-1 ring-foreground"
                       : "border-border hover:border-foreground/30 hover:bg-muted/50",

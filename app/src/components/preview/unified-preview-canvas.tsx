@@ -51,8 +51,8 @@ export function UnifiedPreviewCanvas({
         canvas.classList.add("touch-none", "select-none")
         canvas.style.touchAction = "none"
         canvas.style.userSelect = "none"
-        canvas.style.webkitUserSelect = "none"
-        canvas.style.webkitTouchCallout = "none"
+        canvas.style.setProperty("-webkit-user-select", "none")
+        canvas.style.setProperty("-webkit-touch-callout", "none")
         canvas.oncontextmenu = (event) => event.preventDefault()
         onCreated?.(state)
       }}
