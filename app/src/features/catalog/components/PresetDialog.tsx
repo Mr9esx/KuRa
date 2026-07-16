@@ -12,6 +12,12 @@ interface PresetDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+function getPresetImageSrc(image: string | undefined | null): string | null {
+  if (!image) return null
+  const base = import.meta.env.BASE_URL
+  return `${base}${image.replace(/^\//, "")}`
+}
+
 export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) {
   const applyPreset = useEditorStore((s) => s.applyPreset)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -27,6 +33,7 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
     const item = findItemBySku(sku)
     return { sku, count, name: item?.display_name ?? sku, gridSize: item?.gridSize }
   })
+  const imageSrc = getPresetImageSrc(preset.image)
 
   const handleApply = () => {
     applyPreset(preset)
@@ -43,14 +50,16 @@ export function PresetDialog({ preset, open, onOpenChange }: PresetDialogProps) 
         <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-[380px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
           <div className="relative shrink-0">
             <div className="aspect-[16/10] w-full bg-muted">
-              <img
-                src={preset.image}
-                alt={preset.name}
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none"
-                }}
-              />
+              {imageSrc ? (
+                <img
+                  src={imageSrc}
+                  alt={preset.name}
+                  className="relative z-10 h-full w-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none"
+                  }}
+                />
+              ) : null}
               <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
                 方案预览
               </div>

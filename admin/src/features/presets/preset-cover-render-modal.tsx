@@ -21,7 +21,7 @@ import {
 import { Loader2 } from 'lucide-react'
 import {
   createScene,
-  renderModelToScene,
+  renderPresetToScene,
   applyCameraPose,
   applyLightSetup,
   exportImage,
@@ -30,25 +30,28 @@ import {
   type SceneContext,
   type LightPresetId,
   type ExportFormat,
-  type ModelRenderOptions,
   type CameraRenderOptions,
   type LightSetup,
-} from './item-card-engine'
+  type PresetCoverBlock,
+  type PresetCoverItem,
+  type PresetCoverRenderOptions,
+} from './preset-cover-engine'
 
-interface ItemCardRenderModalProps {
+interface PresetCoverRenderModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  modelPath: string
+  block: PresetCoverBlock
+  items: PresetCoverItem[]
   /** Used to generate a unique export filename */
   nameHint?: string
   onConfirm: (file: File) => void
 }
 
 function uniqueExportName(hint: string | undefined, ext: string) {
-  const safe = (hint || 'product')
+  const safe = (hint || 'preset')
     .replace(/[^a-zA-Z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'product'
+    .slice(0, 40) || 'preset'
   const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   return `rendered-${safe}-${stamp}.${ext}`
 }
@@ -57,13 +60,14 @@ function num2(v: number) {
   return Number(v.toFixed(2))
 }
 
-export function ItemCardRenderModal({
+export function PresetCoverRenderModal({
   open,
   onOpenChange,
-  modelPath,
+  block,
+  items,
   nameHint,
   onConfirm,
-}: ItemCardRenderModalProps) {
+}: PresetCoverRenderModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<SceneContext | null>(null)
   const [status, setStatus] = useState('就绪')
@@ -90,17 +94,13 @@ export function ItemCardRenderModal({
   const [keyI, setKeyI] = useState(DEFAULT_LIGHT_SETUP.key)
   const [fillI, setFillI] = useState(DEFAULT_LIGHT_SETUP.fill)
 
-  const modelRenderOptions = useMemo<ModelRenderOptions>(
+  const sceneRenderOptions = useMemo<PresetCoverRenderOptions>(
     () => ({
-      modelRotationDeg: [rotX, rotY, rotZ],
       fillRatio,
       colorHex: modelColorHex,
-      edgeMode: 'none' as const,
-      edgeColorHex: '#000000',
-      edgeWidthPx: 0,
-      hardEdgeThresholdDeg: 68,
+      sceneRotationDeg: [rotX, rotY, rotZ],
     }),
-    [rotX, rotY, rotZ, fillRatio, modelColorHex]
+    [fillRatio, modelColorHex, rotX, rotY, rotZ]
   )
 
   const cameraRenderOptions = useMemo<CameraRenderOptions>(
@@ -117,7 +117,20 @@ export function ItemCardRenderModal({
     [ambientI, keyI, fillI]
   )
 
-  // Scene init — wait for canvas to have non-zero size (Dialog animation)
+  const sceneKey = useMemo(
+    () =>
+      JSON.stringify({
+        block: block.modelPath,
+        items: items.map((it) => ({
+          p: it.modelPath,
+          x: it.cellX,
+          y: it.cellY,
+          t: it.type,
+        })),
+      }),
+    [block.modelPath, items]
+  )
+
   useEffect(() => {
     if (!open) return
     let disposed = false
@@ -133,10 +146,15 @@ export function ItemCardRenderModal({
       ctx = createScene(canvas)
       sceneRef.current = ctx
       setLoaded(false)
-      setStatus('加载模型中…')
+      setStatus('加载场景中…')
 
-      const modelUrl = `/files/${modelPath}`
-      renderModelToScene(ctx, modelUrl, modelRenderOptions, cameraRenderOptions)
+      renderPresetToScene(
+        ctx,
+        block,
+        items,
+        sceneRenderOptions,
+        cameraRenderOptions
+      )
         .then(() => {
           if (disposed) return
           setLoaded(true)
@@ -154,26 +172,27 @@ export function ItemCardRenderModal({
       ctx?.dispose()
       sceneRef.current = null
     }
-    // only re-init when modal opens or model changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, modelPath])
+  }, [open, sceneKey])
 
-  // Re-render on model option changes
   useEffect(() => {
     if (!open || !loaded || !sceneRef.current) return
     const ctx = sceneRef.current
-    const modelUrl = `/files/${modelPath}`
-    renderModelToScene(ctx, modelUrl, modelRenderOptions, cameraRenderOptions).catch(() => {})
+    renderPresetToScene(
+      ctx,
+      block,
+      items,
+      sceneRenderOptions,
+      cameraRenderOptions
+    ).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelRenderOptions])
+  }, [sceneRenderOptions])
 
-  // Camera pose updates
   useEffect(() => {
     if (!sceneRef.current || !loaded) return
     applyCameraPose(sceneRef.current, cameraRenderOptions)
   }, [cameraRenderOptions, loaded])
 
-  // Light updates
   useEffect(() => {
     if (!sceneRef.current || !loaded) return
     applyLightSetup(sceneRef.current, lightSetup)
@@ -183,7 +202,6 @@ export function ItemCardRenderModal({
     )
   }, [lightSetup, loaded])
 
-  // Light preset sync
   useEffect(() => {
     if (lightPreset === 'custom') return
     const p = LIGHT_PRESETS[lightPreset]
@@ -192,7 +210,6 @@ export function ItemCardRenderModal({
     setFillI(p.values.fill)
   }, [lightPreset])
 
-  // Drag to rotate POV
   const dragRef = useRef({
     active: false,
     startX: 0,
@@ -286,16 +303,14 @@ export function ItemCardRenderModal({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className='px-4 py-3 border-b shrink-0'>
-          <DialogTitle>渲染产品图片</DialogTitle>
+          <DialogTitle>渲染方案封面</DialogTitle>
           <DialogDescription>
             调整渲染参数后，点击「确认使用」
           </DialogDescription>
         </DialogHeader>
 
         <div className='flex flex-1 min-h-0 overflow-hidden'>
-          {/* Controls panel */}
           <div className='w-[280px] shrink-0 overflow-y-auto border-r p-3 space-y-3'>
-            {/* Export size + format */}
             <div className='grid grid-cols-2 gap-2'>
               <div className='space-y-1'>
                 <Label className='text-xs'>导出宽度</Label>
@@ -303,7 +318,9 @@ export function ItemCardRenderModal({
                   type='number'
                   min={64}
                   value={exportWidth}
-                  onChange={(e) => setExportWidth(Number(e.target.value) || 1024)}
+                  onChange={(e) =>
+                    setExportWidth(Number(e.target.value) || 1024)
+                  }
                   className='w-full rounded-md border bg-background px-2 py-1.5 text-xs'
                 />
               </div>
@@ -313,7 +330,9 @@ export function ItemCardRenderModal({
                   type='number'
                   min={64}
                   value={exportHeight}
-                  onChange={(e) => setExportHeight(Number(e.target.value) || 1024)}
+                  onChange={(e) =>
+                    setExportHeight(Number(e.target.value) || 1024)
+                  }
                   className='w-full rounded-md border bg-background px-2 py-1.5 text-xs'
                 />
               </div>
@@ -348,19 +367,11 @@ export function ItemCardRenderModal({
                   value={[exportQuality]}
                   onValueChange={([v]) => setExportQuality(v!)}
                 />
-                <p className='mt-1 text-[10px] text-muted-foreground'>
-                  {exportQuality >= 0.9
-                    ? '高质量，文件较大'
-                    : exportQuality >= 0.7
-                      ? '推荐，质量与体积平衡'
-                      : '高压缩，画质下降明显'}
-                </p>
               </div>
             )}
 
-            {/* Rotation */}
             <div>
-              <Label className='text-xs'>模型旋转</Label>
+              <Label className='text-xs'>场景旋转</Label>
               <div className='mt-1 grid grid-cols-3 gap-2'>
                 {(['X', 'Y', 'Z'] as const).map((axis, i) => {
                   const val = [rotX, rotY, rotZ][i]!
@@ -383,10 +394,9 @@ export function ItemCardRenderModal({
               </div>
             </div>
 
-            {/* Fill ratio */}
             <div>
               <Label className='text-xs'>
-                模型占比（{fillRatio.toFixed(2)}x）
+                场景占比（{fillRatio.toFixed(2)}x）
               </Label>
               <Slider
                 min={0.4}
@@ -398,26 +408,28 @@ export function ItemCardRenderModal({
               />
             </div>
 
-            {/* Model color */}
             <div>
               <Label className='text-xs'>模型颜色</Label>
               <div className='mt-1 flex gap-2'>
                 <input
                   type='text'
                   value={modelColorHex}
-                  onChange={(e) => setModelColorHex(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    setModelColorHex(e.target.value.toUpperCase())
+                  }
                   className='flex-1 rounded-md border bg-background px-2 py-1 text-xs uppercase'
                 />
                 <input
                   type='color'
                   value={modelColorHex}
-                  onChange={(e) => setModelColorHex(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    setModelColorHex(e.target.value.toUpperCase())
+                  }
                   className='h-8 w-8 shrink-0 cursor-pointer rounded border p-0.5'
                 />
               </div>
             </div>
 
-            {/* Light preset */}
             <div>
               <Label className='text-xs'>光照预设</Label>
               <Select
@@ -442,7 +454,6 @@ export function ItemCardRenderModal({
               </Select>
             </div>
 
-            {/* Light sliders */}
             <div className='space-y-2'>
               <div>
                 <Label className='text-[10px]'>
@@ -491,7 +502,6 @@ export function ItemCardRenderModal({
               </div>
             </div>
 
-            {/* Composition offset */}
             <div className='grid grid-cols-2 gap-2'>
               <div className='space-y-1'>
                 <Label className='text-[10px]'>构图偏移 X</Label>
@@ -520,10 +530,10 @@ export function ItemCardRenderModal({
             </div>
           </div>
 
-          {/* Preview canvas */}
           <div className='flex-1 flex flex-col min-w-0 bg-[#faf9f7] dark:bg-neutral-900'>
             <p className='px-3 py-2 text-xs text-muted-foreground'>
               拖动画布旋转视角 · {status}
+              {items.length > 0 ? ` · ${items.length} 个物件` : ''}
             </p>
             <div className='flex-1 min-h-0 px-3 pb-3'>
               <canvas

@@ -388,6 +388,7 @@ export function ProductFormSheet({
           open={renderModalOpen}
           onOpenChange={setRenderModalOpen}
           modelPath={product.model_path}
+          nameHint={form.sku || product.sku}
           onConfirm={handleRenderConfirm}
         />
       )}

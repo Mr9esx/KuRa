@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Mr9esx/RiSu/server/internal/model"
 	"gorm.io/gorm"
@@ -62,6 +63,7 @@ type rawPreset struct {
 	Description string `json:"description"`
 	Image       string `json:"image"`
 	BlockSKU    string `json:"blockSku"`
+	IsPublished *bool  `json:"isPublished"`
 	Items       []struct {
 		SKU  string `json:"sku"`
 		Cell [2]int `json:"cell"`
@@ -91,7 +93,9 @@ func SeedIfEmpty(db *gorm.DB, publishDir, dataDir string) {
 	seedRisers(db, publishDir)
 	seedItemCategories(db, publishDir)
 	seedBlockCategories(db, publishDir)
-	seedPresets(db, publishDir)
+	if err := UpsertPresets(db, publishDir); err != nil {
+		log.Printf("[seeder] WARN: presets upsert failed: %v", err)
+	}
 	copyAssets(publishDir, dataDir)
 
 	log.Println("[seeder] Auto-seed complete")
@@ -308,43 +312,112 @@ func seedBlockCategories(db *gorm.DB, publishDir string) {
 	log.Printf("[seeder] Seeded %d block categories", len(categories))
 }
 
-func seedPresets(db *gorm.DB, publishDir string) {
+// UpsertPresets reads publishDir/data/presets.json and upserts by preset_id.
+// Existing items are replaced. Presets not listed in JSON are left untouched.
+func UpsertPresets(db *gorm.DB, publishDir string) error {
 	data, err := os.ReadFile(filepath.Join(publishDir, "data", "presets.json"))
 	if err != nil {
-		log.Printf("[seeder] WARN: presets.json not found, skipping")
-		return
+		return fmt.Errorf("read presets.json: %w", err)
 	}
 
 	var presets []rawPreset
 	if err := json.Unmarshal(data, &presets); err != nil {
-		log.Printf("[seeder] WARN: cannot parse presets.json: %v", err)
-		return
+		return fmt.Errorf("parse presets.json: %w", err)
 	}
 
+	created, updated := 0, 0
 	for _, p := range presets {
-		preset := model.Preset{
-			PresetID:    p.ID,
-			Name:        p.Name,
-			Description: p.Description,
-			Image:       p.Image,
-			BlockSKU:    p.BlockSKU,
-			IsPublished: true,
-		}
-		if err := db.Create(&preset).Error; err != nil {
-			log.Printf("[seeder] WARN: preset %s: %v", p.ID, err)
+		if strings.TrimSpace(p.ID) == "" {
+			log.Printf("[seeder] WARN: skip preset with empty id")
 			continue
 		}
 
-		for _, item := range p.Items {
-			db.Create(&model.PresetItem{
-				PresetID:   preset.ID,
-				ProductSKU: item.SKU,
-				CellX:      item.Cell[0],
-				CellY:      item.Cell[1],
-			})
+		published := true
+		if p.IsPublished != nil {
+			published = *p.IsPublished
+		}
+		image := strings.TrimPrefix(strings.TrimSpace(p.Image), "/")
+
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var existing model.Preset
+			findErr := tx.Where("preset_id = ?", p.ID).First(&existing).Error
+			if findErr != nil && findErr != gorm.ErrRecordNotFound {
+				return findErr
+			}
+
+			if findErr == gorm.ErrRecordNotFound {
+				preset := model.Preset{
+					PresetID:    p.ID,
+					Name:        p.Name,
+					Description: p.Description,
+					Image:       image,
+					BlockSKU:    p.BlockSKU,
+					IsPublished: published,
+				}
+				if err := tx.Create(&preset).Error; err != nil {
+					return err
+				}
+				for _, item := range p.Items {
+					if err := tx.Create(&model.PresetItem{
+						PresetID:   preset.ID,
+						ProductSKU: item.SKU,
+						CellX:      item.Cell[0],
+						CellY:      item.Cell[1],
+					}).Error; err != nil {
+						return err
+					}
+				}
+				created++
+				return nil
+			}
+
+			existing.Name = p.Name
+			existing.Description = p.Description
+			existing.Image = image
+			existing.BlockSKU = p.BlockSKU
+			existing.IsPublished = published
+			if err := tx.Save(&existing).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("preset_id = ?", existing.ID).Delete(&model.PresetItem{}).Error; err != nil {
+				return err
+			}
+			for _, item := range p.Items {
+				if err := tx.Create(&model.PresetItem{
+					PresetID:   existing.ID,
+					ProductSKU: item.SKU,
+					CellX:      item.Cell[0],
+					CellY:      item.Cell[1],
+				}).Error; err != nil {
+					return err
+				}
+			}
+			updated++
+			return nil
+		})
+		if err != nil {
+			log.Printf("[seeder] WARN: preset %s: %v", p.ID, err)
 		}
 	}
-	log.Printf("[seeder] Seeded %d presets", len(presets))
+
+	log.Printf("[seeder] Upserted presets: created=%d updated=%d total=%d", created, updated, len(presets))
+	return nil
+}
+
+// SyncPresetAssets copies preset cover images from publishDir into dataDir.
+func SyncPresetAssets(publishDir, dataDir string) error {
+	src := filepath.Join(publishDir, "images", "presets")
+	dst := filepath.Join(dataDir, "images", "presets")
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		log.Printf("[seeder] No preset images at %s, skip asset sync", src)
+		return nil
+	}
+	copied, err := copyTree(src, dst)
+	if err != nil {
+		return err
+	}
+	log.Printf("[seeder] Synced %d preset image files to data directory", copied)
+	return nil
 }
 
 func copyAssets(publishDir, dataDir string) {
@@ -352,34 +425,45 @@ func copyAssets(publishDir, dataDir string) {
 		{filepath.Join(publishDir, "models"), filepath.Join(dataDir, "models")},
 		{filepath.Join(publishDir, "images", "block"), filepath.Join(dataDir, "images", "block")},
 		{filepath.Join(publishDir, "images", "items"), filepath.Join(dataDir, "images", "items")},
+		{filepath.Join(publishDir, "images", "presets"), filepath.Join(dataDir, "images", "presets")},
 	}
 
 	total := 0
 	for _, d := range dirs {
-		if _, err := os.Stat(d.src); os.IsNotExist(err) {
+		n, err := copyTree(d.src, d.dst)
+		if err != nil {
+			log.Printf("[seeder] WARN: copy %s: %v", d.src, err)
 			continue
 		}
-
-		filepath.Walk(d.src, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return err
-			}
-
-			relPath, _ := filepath.Rel(d.src, path)
-			dstPath := filepath.Join(d.dst, relPath)
-
-			if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-				return err
-			}
-
-			if err := copyFile(path, dstPath); err != nil {
-				return fmt.Errorf("copy %s -> %s: %w", path, dstPath, err)
-			}
-			total++
-			return nil
-		})
+		total += n
 	}
 	log.Printf("[seeder] Copied %d asset files to data directory", total)
+}
+
+func copyTree(src, dst string) (int, error) {
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		return 0, nil
+	}
+	copied := 0
+	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, relPath)
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return err
+		}
+		if err := copyFile(path, dstPath); err != nil {
+			return fmt.Errorf("copy %s -> %s: %w", path, dstPath, err)
+		}
+		copied++
+		return nil
+	})
+	return copied, err
 }
 
 func copyFile(src, dst string) error {

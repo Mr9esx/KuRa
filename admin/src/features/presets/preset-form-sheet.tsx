@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -27,7 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
+import { ImageIcon, Loader2, Plus, Trash2, Upload, Wand2 } from 'lucide-react'
+import { PresetCoverRenderModal } from './preset-cover-render-modal'
+import type {
+  PresetCoverBlock,
+  PresetCoverItem,
+} from './preset-cover-engine'
 
 interface PresetFormSheetProps {
   open: boolean
@@ -65,6 +71,7 @@ export function PresetFormSheet({
   const [saving, setSaving] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [renderModalOpen, setRenderModalOpen] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const [allProducts, setAllProducts] = useState<Product[]>([])
@@ -134,6 +141,13 @@ export function PresetFormSheet({
     [preset]
   )
 
+  const handleRenderConfirm = useCallback(
+    (file: File) => {
+      handleImageFileChange(file)
+    },
+    [handleImageFileChange]
+  )
+
   const addItem = useCallback(() => {
     setItems((prev) => [
       ...prev,
@@ -154,6 +168,74 @@ export function PresetFormSheet({
     []
   )
 
+  const productBysku = useCallback(
+    (sku: string) => allProducts.find((p) => p.sku === sku),
+    [allProducts]
+  )
+
+  const canRenderCover = Boolean(
+    selectedBlock?.model_path &&
+      selectedBlock.inner_width &&
+      selectedBlock.inner_depth
+  )
+
+  const renderBlock: PresetCoverBlock | null =
+    selectedBlock?.model_path &&
+    selectedBlock.inner_width &&
+    selectedBlock.inner_depth
+      ? {
+          modelPath: selectedBlock.model_path,
+          innerWidth: selectedBlock.inner_width,
+          innerDepth: selectedBlock.inner_depth,
+          height: selectedBlock.height,
+          modelBackHookDepth: selectedBlock.model_back_hook_depth ?? 0,
+          modelRotation: [
+            selectedBlock.model_rotation_x,
+            selectedBlock.model_rotation_y,
+            selectedBlock.model_rotation_z,
+          ],
+        }
+      : null
+
+  const renderItems: PresetCoverItem[] = items.flatMap((it) => {
+    const prod = productBysku(it.product_sku)
+    if (!prod?.model_path) return []
+    const type = prod.type === 'riser' ? 'riser' : 'item'
+    return [
+      {
+        modelPath: prod.model_path,
+        cellX: it.cell_x,
+        cellY: it.cell_y,
+        gridCols: prod.grid_cols,
+        gridRows: prod.grid_rows,
+        height: prod.height,
+        type,
+        modelRotation: [
+          prod.model_rotation_x,
+          prod.model_rotation_y,
+          prod.model_rotation_z,
+        ],
+      },
+    ]
+  })
+
+  const openRenderModal = useCallback(() => {
+    if (!canRenderCover) {
+      toast.error('请先选择带 3D 模型的框体')
+      return
+    }
+    const missing = items.filter((it) => {
+      if (!it.product_sku) return false
+      return !productBysku(it.product_sku)?.model_path
+    })
+    if (missing.length > 0) {
+      toast.warning(
+        `${missing.length} 个物件缺少 3D 模型，将仅渲染已有模型的物件`
+      )
+    }
+    setRenderModalOpen(true)
+  }, [canRenderCover, items, productBysku])
+
   const detectConflicts = useCallback(() => {
     const conflicts: string[] = []
     for (let i = 0; i < items.length; i++) {
@@ -164,6 +246,10 @@ export function PresetFormSheet({
         const b = items[j]!
         const pb = productBysku(b.product_sku)
         if (!pb) continue
+        // 物件可以叠在增高件上，二者同格不算冲突；同类型重叠才算
+        if (pa.type !== pb.type && (pa.type === 'riser' || pb.type === 'riser')) {
+          continue
+        }
         const overlapX =
           a.cell_x < b.cell_x + pb.grid_cols &&
           a.cell_x + pa.grid_cols > b.cell_x
@@ -188,7 +274,7 @@ export function PresetFormSheet({
       }
     }
     return conflicts
-  }, [items, allProducts, gridCols, gridRows])
+  }, [items, productBysku, gridCols, gridRows])
 
   const handleSubmit = async () => {
     if (!form.preset_id || !form.name || !form.block_sku) {
@@ -245,11 +331,8 @@ export function PresetFormSheet({
     }
   }
 
-  const availableProducts = [...itemProducts, ...riserProducts]
-
-  const productBysku = (sku: string) => allProducts.find((p) => p.sku === sku)
-
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className='sm:max-w-3xl max-h-[90vh]'
@@ -298,6 +381,21 @@ export function PresetFormSheet({
                   <Upload className='mr-2 h-4 w-4' />
                   上传图片
                 </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={!canRenderCover}
+                  onClick={openRenderModal}
+                >
+                  <Wand2 className='mr-2 h-4 w-4' />
+                  渲染生成
+                </Button>
+                {!canRenderCover && (
+                  <p className='text-xs text-muted-foreground'>
+                    需先选择带 3D 模型的框体才可渲染
+                  </p>
+                )}
                 {imageFile && (
                   <p className='text-xs text-muted-foreground'>
                     已选择：{imageFile.name}
@@ -342,6 +440,22 @@ export function PresetFormSheet({
               }
               placeholder='方案描述'
               rows={2}
+            />
+          </div>
+
+          <div className='flex items-center justify-between rounded-md border p-3'>
+            <div className='space-y-1'>
+              <Label htmlFor='preset-published'>上架到网站</Label>
+              <p className='text-xs text-muted-foreground'>
+                开启后，执行「发布管理」会把封面图同步到前端站点。
+              </p>
+            </div>
+            <Switch
+              id='preset-published'
+              checked={form.is_published}
+              onCheckedChange={(checked) =>
+                setForm({ ...form, is_published: checked })
+              }
             />
           </div>
 
@@ -585,14 +699,27 @@ export function PresetFormSheet({
                           y < it.cell_y + p.grid_rows
                         )
                       })
-                      const isOrigin = items.some(
-                        (it) => it.cell_x === x && it.cell_y === y
+                      const itemOccupants = occupants.filter(
+                        (it) => productBysku(it.product_sku)?.type !== 'riser'
                       )
-                      const occupant = occupants[0]
+                      const riserOccupants = occupants.filter(
+                        (it) => productBysku(it.product_sku)?.type === 'riser'
+                      )
+                      // 同格可叠：物件 + 增高件；同类型多占才算冲突
+                      const hasConflict =
+                        itemOccupants.length > 1 || riserOccupants.length > 1
+                      const occupant = itemOccupants[0] ?? riserOccupants[0]
                       const prod = occupant
                         ? productBysku(occupant.product_sku)
                         : null
-                      const hasConflict = occupants.length > 1
+                      const isOrigin = items.some(
+                        (it) =>
+                          it.cell_x === x &&
+                          it.cell_y === y &&
+                          (itemOccupants.includes(it) ||
+                            (!itemOccupants.length && riserOccupants.includes(it)))
+                      )
+                      const stacked = itemOccupants.length > 0 && riserOccupants.length > 0
 
                       return (
                         <div
@@ -600,28 +727,33 @@ export function PresetFormSheet({
                           className={`flex h-12 items-center justify-center rounded text-[9px] leading-tight text-center ${
                             hasConflict
                               ? 'bg-destructive/20 text-destructive ring-1 ring-destructive/40'
-                              : occupant
-                                ? prod?.type === 'riser'
-                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                                  : 'bg-primary/10 text-primary'
-                                : 'bg-background'
+                              : stacked
+                                ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300/50 dark:bg-amber-900/40 dark:text-amber-200'
+                                : occupant
+                                  ? prod?.type === 'riser'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                                    : 'bg-primary/10 text-primary'
+                                  : 'bg-background'
                           }`}
                           title={
                             hasConflict
                               ? `冲突：${occupants.map((o) => o.product_sku).join(', ')}`
-                              : occupant
-                                ? `${occupant.product_sku} (${x},${y})`
-                                : `空 (${x},${y})`
+                              : stacked
+                                ? `${itemOccupants[0]!.product_sku} 叠在 ${riserOccupants.map((o) => o.product_sku).join('+')} 上 (${x},${y})`
+                                : occupant
+                                  ? `${occupant.product_sku} (${x},${y})`
+                                  : `空 (${x},${y})`
                           }
                         >
                           {hasConflict ? (
                             '冲突!'
                           ) : isOrigin && prod ? (
                             <span className='truncate px-0.5'>
-                              {prod.sku_name.slice(0, 6)}
+                              {stacked ? '↑' : ''}
+                              {prod.sku_name.slice(0, stacked ? 5 : 6)}
                             </span>
                           ) : occupant ? (
-                            '·'
+                            stacked ? '↑' : '·'
                           ) : (
                             <span className='text-muted-foreground/40'>
                               {x},{y}
@@ -649,5 +781,17 @@ export function PresetFormSheet({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {renderBlock && (
+      <PresetCoverRenderModal
+        open={renderModalOpen}
+        onOpenChange={setRenderModalOpen}
+        block={renderBlock}
+        items={renderItems}
+        nameHint={form.preset_id || form.name}
+        onConfirm={handleRenderConfirm}
+      />
+    )}
+    </>
   )
 }

@@ -431,14 +431,26 @@ func (p *Publisher) collectReferencedFiles() (map[string]bool, error) {
 	}
 
 	referencedFiles := make(map[string]bool)
-	for _, prod := range products {
-		if prod.ModelPath != "" {
-			referencedFiles[filepath.ToSlash(prod.ModelPath)] = true
-		}
-		if prod.ImagePath != "" {
-			referencedFiles[filepath.ToSlash(prod.ImagePath)] = true
+	addRef := func(path string) {
+		rel := filepath.ToSlash(strings.TrimPrefix(strings.TrimSpace(path), "/"))
+		if rel != "" {
+			referencedFiles[rel] = true
 		}
 	}
+
+	for _, prod := range products {
+		addRef(prod.ModelPath)
+		addRef(prod.ImagePath)
+	}
+
+	var presets []model.Preset
+	if err := p.DB.Where("is_published = ?", true).Find(&presets).Error; err != nil {
+		return nil, fmt.Errorf("failed to query presets: %w", err)
+	}
+	for _, preset := range presets {
+		addRef(preset.Image)
+	}
+
 	return referencedFiles, nil
 }
 

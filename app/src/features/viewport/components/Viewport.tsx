@@ -733,19 +733,35 @@ function PresetSelector({
         className="no-scrollbar flex w-full overflow-x-auto overflow-y-hidden px-11 py-2"
       >
         <div className="flex w-max gap-2">
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => onSelect(preset)}
-              className="group flex w-[170px] shrink-0 flex-col rounded-lg border border-border bg-background p-2 text-left transition-all hover:border-foreground/30 hover:bg-muted/30"
-            >
-              <div className="mb-1.5 aspect-[4/3] w-full overflow-hidden rounded-md bg-muted/60" />
-              <div className="truncate text-xs font-medium leading-tight">{preset.name}</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">
-                {preset.items.length} 件
-              </div>
-            </button>
-          ))}
+          {presets.map((preset) => {
+            const imageSrc = preset.image
+              ? `${import.meta.env.BASE_URL}${preset.image.replace(/^\//, "")}`
+              : null
+            return (
+              <button
+                key={preset.id}
+                onClick={() => onSelect(preset)}
+                className="group flex w-[170px] shrink-0 flex-col rounded-lg border border-border bg-background p-2 text-left transition-all hover:border-foreground/30 hover:bg-muted/30"
+              >
+                <div className="mb-1.5 aspect-[4/3] w-full overflow-hidden rounded-md bg-muted/60">
+                  {imageSrc ? (
+                    <img
+                      src={imageSrc}
+                      alt={preset.name}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        ;(e.target as HTMLImageElement).style.display = "none"
+                      }}
+                    />
+                  ) : null}
+                </div>
+                <div className="truncate text-xs font-medium leading-tight">{preset.name}</div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                  {preset.items.length} 件
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
 

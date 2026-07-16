@@ -47,6 +47,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y gcc
           CGO_ENABLED=1 go build -o risu-server ./cmd/
           CGO_ENABLED=1 go build -o risu-release-recorder ./cmd/release-recorder
+          CGO_ENABLED=1 go build -o risu-sync-presets ./cmd/sync-presets
 
       - name: Generate release metadata
         env:
@@ -95,6 +96,7 @@ jobs:
             admin/dist \
             server/risu-server \
             server/risu-release-recorder \
+            server/risu-sync-presets \
             server/internal/geo/data/GeoLite2-City.mmdb \
             release-meta \
             deploy/
@@ -144,6 +146,7 @@ jobs:
             cp -a "${RELEASE_TMP}/admin/dist" "${CURRENT_RELEASE_DIR}/admin"
             cp "${RELEASE_TMP}/server/risu-server" "${CURRENT_RELEASE_DIR}/server/risu-server"
             cp "${RELEASE_TMP}/server/risu-release-recorder" "${CURRENT_RELEASE_DIR}/server/risu-release-recorder"
+            cp "${RELEASE_TMP}/server/risu-sync-presets" "${CURRENT_RELEASE_DIR}/server/risu-sync-presets"
             if [ -f "${RELEASE_TMP}/server/internal/geo/data/GeoLite2-City.mmdb" ]; then
               cp "${RELEASE_TMP}/server/internal/geo/data/GeoLite2-City.mmdb" "${CURRENT_RELEASE_DIR}/server/GeoLite2-City.mmdb"
             fi
@@ -169,6 +172,8 @@ jobs:
             chmod +x /usr/local/bin/risu-server
             cp "${CURRENT_RELEASE_DIR}/server/risu-release-recorder" /usr/local/bin/risu-release-recorder
             chmod +x /usr/local/bin/risu-release-recorder
+            cp "${CURRENT_RELEASE_DIR}/server/risu-sync-presets" /usr/local/bin/risu-sync-presets
+            chmod +x /usr/local/bin/risu-sync-presets
 
             # Deploy config (only if not exists, preserve production config)
             mkdir -p /etc/risu
@@ -211,6 +216,12 @@ jobs:
             # Restart services
             systemctl start risu-server
             nginx -t && systemctl reload nginx
+
+            # Sync catalog presets from dist JSON into production DB + data dir
+            if [[ -x /usr/local/bin/risu-sync-presets && -f /etc/risu/config.yaml ]]; then
+              echo "Syncing presets from publish dir..."
+              RISU_CONFIG=/etc/risu/config.yaml /usr/local/bin/risu-sync-presets
+            fi
 
             # Record release metadata into database
             if [[ -x /usr/local/bin/risu-release-recorder && -f /etc/risu/config.yaml ]]; then
