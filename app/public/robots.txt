@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kura.miaoplus.com/sitemap.xml
