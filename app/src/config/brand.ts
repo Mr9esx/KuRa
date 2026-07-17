@@ -10,6 +10,10 @@ export const APP_SOCIAL = {
     label: `${APP_PAGE_TITLE} 小红书`,
     account: `@${APP_PAGE_TITLE}官方账号`,
   },
+  feedback: {
+    label: `${APP_PAGE_TITLE}收纳需求采集`,
+    url: "https://f.kdocs.cn/g/RY1Uh77M/",
+  },
 } as const
 
 export const APP_PREFIX = "app"

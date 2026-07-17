@@ -17,12 +17,14 @@ import {
   APP_LICENSE_NAME,
   APP_LICENSE_URL,
   APP_PAGE_TITLE,
+  APP_SOCIAL,
   CUSTOM_EVENTS,
   DATA_TRANSFER_TYPE,
   EXPORT_PREFIX,
 } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
 import { TitleLogo } from "@/components/brand/title-logo"
+import { Topic } from "@/components/brand/topic-icon"
 import { type BlockCatalogItem, type Preset } from "@/types/catalog"
 import type { Placement } from "@/types/editor"
 import { Trash2, ChevronLeft, ChevronRight, Eraser, Pipette, ArrowUpDown, Layers, CircleHelp, AlertTriangle, Info } from "lucide-react"
@@ -847,6 +849,22 @@ function MobileTopBar() {
             <Info className="size-[18px]" strokeWidth={2.2} />
           </TooltipTrigger>
           <TooltipContent>关于</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <a
+                href={APP_SOCIAL.feedback.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
+                aria-label={APP_SOCIAL.feedback.label}
+              />
+            }
+          >
+            <Topic theme="outline" size={20} fill="currentColor" />
+          </TooltipTrigger>
+          <TooltipContent>{APP_SOCIAL.feedback.label}</TooltipContent>
         </Tooltip>
         <AboutLicenseDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       </div>

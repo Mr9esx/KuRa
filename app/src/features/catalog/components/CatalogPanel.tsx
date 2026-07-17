@@ -9,9 +9,10 @@ import { Dialog } from "@base-ui/react/dialog"
 import { CircleHelp } from "lucide-react"
 import { type BlockCatalogItem, type CatalogItem } from "@/types/catalog"
 import { cn } from "@/lib/utils"
-import { CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
+import { APP_SOCIAL, CUSTOM_EVENTS, DATA_TRANSFER_TYPE } from "@/config/brand"
 import { AppLogo } from "@/components/brand/app-logo"
 import { TitleLogo } from "@/components/brand/title-logo"
+import { Topic } from "@/components/brand/topic-icon"
 
 const emptyDragImage = (() => {
   const canvas = document.createElement("canvas")
@@ -96,7 +97,31 @@ function TourReplayButton() {
   )
 }
 
-export { ThemeToggleButton, TourReplayButton }
+function FeedbackSurveyButton({ className }: { className?: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <a
+            href={APP_SOCIAL.feedback.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "rounded-md p-1 text-foreground transition-colors hover:bg-muted hover:text-foreground",
+              className,
+            )}
+            aria-label={APP_SOCIAL.feedback.label}
+          />
+        }
+      >
+        <Topic theme="outline" size={20} fill="currentColor" />
+      </TooltipTrigger>
+      <TooltipContent>{APP_SOCIAL.feedback.label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+export { ThemeToggleButton, TourReplayButton, FeedbackSurveyButton }
 
 interface CatalogPanelProps {
   narrow?: boolean
@@ -657,6 +682,7 @@ export function CatalogPanel({ narrow, mobile }: CatalogPanelProps) {
           <div className="flex items-center gap-0.5">
             <TourReplayButton />
             <ThemeToggleButton />
+            <FeedbackSurveyButton />
           </div>
         </div>
         <div className="mt-4">
